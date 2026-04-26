@@ -18,6 +18,10 @@ class HorchdState {
   lastFires = $state<Record<string, FireRecord>>({});
   /** name → live score (updated ~5 Hz from `horchd://score`) */
   liveScores = $state<Record<string, number>>({});
+  /** name → rolling score history, oldest first. ~150 samples = 30s @ 5Hz. */
+  scoreTraces = $state<Record<string, number[]>>({});
+  /** name → fire timestamps (ms), newest last, capped to recent window */
+  fireTimes = $state<Record<string, number[]>>({});
   /** newest fire first, capped */
   recentFires = $state<FireRecord[]>([]);
   /** UI tick counter so derived "x seconds ago" labels re-render */
@@ -144,10 +148,16 @@ class HorchdState {
     const rec: FireRecord = { name, score, ts_ms: tsMs };
     this.lastFires = { ...this.lastFires, [name]: rec };
     this.recentFires = [rec, ...this.recentFires].slice(0, 8);
+    const prev = this.fireTimes[name] ?? [];
+    const next = [...prev, tsMs].filter((t) => Date.now() - t < 60_000);
+    this.fireTimes = { ...this.fireTimes, [name]: next };
   }
 
   recordScore(name: string, score: number) {
     this.liveScores = { ...this.liveScores, [name]: score };
+    const prev = this.scoreTraces[name] ?? [];
+    const next = prev.length >= 150 ? [...prev.slice(1), score] : [...prev, score];
+    this.scoreTraces = { ...this.scoreTraces, [name]: next };
   }
 
   async start() {

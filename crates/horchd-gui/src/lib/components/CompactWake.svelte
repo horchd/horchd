@@ -31,6 +31,32 @@
   const meterPct = $derived(Math.max(0, Math.min(1, live ?? 0)) * 100);
   const over = $derived(live !== undefined && live >= local);
 
+  const trace = $derived(app.scoreTraces[wake.name] ?? []);
+  const TRACE_W = 160;
+  const TRACE_H = 22;
+  const tracePath = $derived.by(() => {
+    if (trace.length < 2) return "";
+    const step = TRACE_W / Math.max(1, trace.length - 1);
+    return trace
+      .map((v, i) => {
+        const y = TRACE_H - Math.max(0, Math.min(1, v)) * TRACE_H;
+        return `${i === 0 ? "M" : "L"} ${(i * step).toFixed(2)} ${y.toFixed(2)}`;
+      })
+      .join(" ");
+  });
+  const traceFillPath = $derived.by(() => {
+    if (trace.length < 2 || !tracePath) return "";
+    return `${tracePath} L ${TRACE_W} ${TRACE_H} L 0 ${TRACE_H} Z`;
+  });
+  const thresholdY = $derived(TRACE_H - local * TRACE_H);
+
+  // Fire counter in last 60 s — triggers tick re-render via app.tick.
+  const recentFireCount = $derived(((_: number) => {
+    const cutoff = Date.now() - 60_000;
+    const arr = app.fireTimes[wake.name] ?? [];
+    return arr.filter((t) => t >= cutoff).length;
+  })(app.tick));
+
   async function onInput(ev: Event) {
     const v = parseFloat((ev.target as HTMLInputElement).value);
     pending = v;
@@ -70,7 +96,12 @@
   </button>
 
   <div class="name-col">
-    <div class="name">{wake.name}</div>
+    <div class="name-row">
+      <span class="name">{wake.name}</span>
+      {#if recentFireCount > 0}
+        <span class="fire-badge" title="Fires in the last 60 s">{recentFireCount}× / 60s</span>
+      {/if}
+    </div>
     <div class="meta" title={wake.model}>
       {wake.cooldown_ms} ms · last fire {lastFireLabel}
     </div>
@@ -96,6 +127,29 @@
         <span class="threshold">{local.toFixed(3)}</span>
       </div>
     </div>
+    <svg
+      class="trace"
+      class:over
+      viewBox="0 0 {TRACE_W} {TRACE_H}"
+      preserveAspectRatio="none"
+      role="img"
+      aria-label="Score trace, last ~30 s"
+    >
+      <line
+        x1="0"
+        x2={TRACE_W}
+        y1={thresholdY}
+        y2={thresholdY}
+        class="trace-threshold"
+        stroke-dasharray="3 3"
+      />
+      {#if traceFillPath}
+        <path d={traceFillPath} class="trace-fill" />
+      {/if}
+      {#if tracePath}
+        <path d={tracePath} class="trace-line" fill="none" />
+      {/if}
+    </svg>
   </div>
 
   <div class="actions">
@@ -171,6 +225,11 @@
   .name-col {
     min-width: 0;
   }
+  .name-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
   .name {
     font-family: var(--font-mono);
     font-weight: 600;
@@ -179,6 +238,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .fire-badge {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    padding: 1px 6px;
+    background: color-mix(in oklab, var(--color-accent) 8%, transparent);
   }
   .meta {
     font-size: 10px;
@@ -278,17 +348,50 @@
     border-color: var(--color-accent);
   }
 
+  .trace {
+    width: 100%;
+    height: 22px;
+    margin-top: 6px;
+    display: block;
+  }
+  .trace-threshold {
+    stroke: var(--color-rule-soft);
+    stroke-width: 1;
+    opacity: 0.8;
+  }
+  .trace-line {
+    stroke: var(--color-ink-soft);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    transition: stroke 0.25s ease;
+  }
+  .trace-fill {
+    fill: var(--color-ink-soft);
+    opacity: 0.12;
+    transition: fill 0.25s ease, opacity 0.25s ease;
+  }
+  .trace.over .trace-line { stroke: var(--color-accent); }
+  .trace.over .trace-fill { fill: var(--color-accent); opacity: 0.18; }
+
   @keyframes wake-flash {
     0% {
+      background: color-mix(in oklab, var(--color-accent) 38%, var(--color-paper));
+      border-color: var(--color-accent);
+      box-shadow: inset 4px 0 0 var(--color-accent);
+    }
+    30% {
       background: color-mix(in oklab, var(--color-accent) 22%, var(--color-paper));
       border-color: var(--color-accent);
+      box-shadow: inset 4px 0 0 var(--color-accent);
     }
     100% {
       background: var(--color-paper);
       border-color: var(--color-rule);
+      box-shadow: none;
     }
   }
   :global(.flash) {
-    animation: wake-flash 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+    animation: wake-flash 1.6s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 </style>
