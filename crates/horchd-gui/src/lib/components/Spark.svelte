@@ -16,8 +16,8 @@
 </script>
 
 <div class="spark">
-  {#each bars as { h, peak } (h + "·" + peak)}
-    <span class="bar" class:peak style:height={h + "px"}></span>
+  {#each bars as bar, i (i)}
+    <span class="bar" class:peak={bar.peak} style:height={bar.h + "px"}></span>
   {/each}
 </div>
 
