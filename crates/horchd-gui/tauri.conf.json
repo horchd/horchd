@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "horchd",
+  "version": "0.1.0",
+  "identifier": "xyz.horchd.gui",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../src-web"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "horchd",
+        "width": 720,
+        "height": 540,
+        "minWidth": 480,
+        "minHeight": 360,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true
+      }
+    ],
+    "trayIcon": {
+      "iconPath": "icons/tray.png",
+      "iconAsTemplate": true,
+      "menuOnLeftClick": false
+    },
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": false
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["appimage", "deb", "rpm"],
+    "category": "Utility",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.png"
+    ],
+    "shortDescription": "Wakeword detection control panel",
+    "longDescription": "Tauri-based tray + control panel for the horchd wakeword detection daemon. Talks to the daemon over D-Bus on the session bus.",
+    "linux": {
+      "deb": {
+        "depends": ["horchd"]
+      }
+    }
+  },
+  "plugins": {}
+}

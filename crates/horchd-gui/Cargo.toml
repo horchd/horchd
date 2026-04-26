@@ -1,0 +1,36 @@
+[package]
+name = "horchd-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Tauri tray app + control panel for the horchd wakeword daemon"
+
+# NOTE: not added to the workspace `members` list yet. Building this
+# crate requires the tauri-cli and Linux dev headers
+# (`webkit2gtk-4.1-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev`,
+# `libxdo-dev`). Install them, then either flip the workspace member
+# list or `cd crates/horchd-gui && cargo tauri build`.
+
+[lib]
+name = "horchd_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow = "1"
+futures-util = "0.3"
+horchd-core = { version = "0.1.0", path = "../horchd-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+zbus = "5"
