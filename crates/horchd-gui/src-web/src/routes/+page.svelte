@@ -7,13 +7,13 @@
   import Ticker from "$lib/components/Ticker.svelte";
   import Toast from "$lib/components/Toast.svelte";
   import WakeCard from "$lib/components/WakeCard.svelte";
-  import { state } from "$lib/state.svelte";
+  import { app } from "$lib/app.svelte";
 
   let addOpen = $state(false);
 
   $effect(() => {
-    void state.start();
-    return () => state.stop();
+    void app.start();
+    return () => app.stop();
   });
 </script>
 
@@ -32,37 +32,37 @@
           Wakeword Detection · Session Bus
         </div>
       </div>
-      <StatusPill running={state.status.running} reachable={state.reachable} />
+      <StatusPill running={app.status.running} reachable={app.reachable} />
     </header>
 
     <section class="readout grid gap-8 py-8 hair-b">
       <Gauge
         label="Audio capture"
-        value={state.status.audio_fps}
-        reachable={state.reachable}
-        history={state.audioHistory}
+        value={app.status.audio_fps}
+        reachable={app.reachable}
+        history={app.audioHistory}
       />
       <div class="divider"></div>
       <Gauge
         label="Inference"
-        value={state.status.score_fps}
-        reachable={state.reachable}
-        history={state.scoreHistory}
+        value={app.status.score_fps}
+        reachable={app.reachable}
+        history={app.scoreHistory}
       />
     </section>
 
     <div class="flex items-center justify-between pt-7 pb-3">
       <h2 class="label-tracked font-bold text-(--color-ink) text-[11px] m-0">Wakewords</h2>
-      <div class="label-tracked text-(--color-muted)">{state.wakes.length} loaded</div>
+      <div class="label-tracked text-(--color-muted)">{app.wakes.length} loaded</div>
     </div>
 
     <section class="wakes flex flex-col">
-      {#if state.wakes.length === 0}
+      {#if app.wakes.length === 0}
         <div class="empty hair">
           No wakewords. Use <code class="hair-soft">horchctl add</code> or the button below.
         </div>
       {:else}
-        {#each state.wakes as wake (wake.name)}
+        {#each app.wakes as wake (wake.name)}
           <WakeCard {wake} />
         {/each}
       {/if}
@@ -72,7 +72,7 @@
       <button class="btn primary hair" onclick={() => (addOpen = true)}>
         <Plus size="14" strokeWidth={2.5} /> Add wakeword
       </button>
-      <button class="btn hair" onclick={() => state.reload()}>
+      <button class="btn hair" onclick={() => app.reload()}>
         <RotateCcw size="14" strokeWidth={2.5} /> Reload config
       </button>
     </div>

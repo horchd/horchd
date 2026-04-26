@@ -1,26 +1,25 @@
 <script lang="ts">
   import { Save, X } from "@lucide/svelte";
-  import { state } from "$lib/state.svelte";
+  import { app } from "$lib/app.svelte";
   import { elapsed, shortPath } from "$lib/utils";
   import type { WakewordRow } from "$lib/types";
 
   type Props = { wake: WakewordRow };
   let { wake }: Props = $props();
 
-  let local = $state(wake.threshold);
-  let dirty = $state(false);
+  // `pending` is the slider's working value while the user drags; when
+  // `undefined`, fall back to the daemon's snapshot. This pattern keeps
+  // `wake.threshold` reactively tracked (it lives inside a $derived)
+  // without a separate $effect-driven sync.
+  let pending = $state<number | undefined>(undefined);
+  const local = $derived(pending ?? wake.threshold);
+  const dirty = $derived(pending !== undefined && pending !== wake.threshold);
   let card: HTMLElement | undefined = $state();
   let debounceId: ReturnType<typeof setTimeout> | undefined;
 
-  // Keep local slider in sync with the snapshot from the daemon when we
-  // haven't dirtied it ourselves.
-  $effect(() => {
-    if (!dirty) local = wake.threshold;
-  });
-
   // Flash the card when this wake fires.
   $effect(() => {
-    const fire = state.lastFires[wake.name];
+    const fire = app.lastFires[wake.name];
     if (!fire || !card) return;
     const target = card;
     target.classList.remove("flash");
@@ -28,28 +27,27 @@
     target.classList.add("flash");
   });
 
-  // "x seconds ago" label re-renders when state.tick advances.
+  // "x seconds ago" label re-renders when app.tick advances.
   const lastFireLabel = $derived(((_: number) => {
-    const f = state.lastFires[wake.name];
+    const f = app.lastFires[wake.name];
     return f ? elapsed(f.ts_ms) : "never";
-  })(state.tick));
+  })(app.tick));
 
   async function onInput(ev: Event) {
     const v = parseFloat((ev.target as HTMLInputElement).value);
-    local = v;
-    dirty = true;
+    pending = v;
     if (debounceId) clearTimeout(debounceId);
-    debounceId = setTimeout(() => state.setThreshold(wake.name, v, false), 220);
+    debounceId = setTimeout(() => app.setThreshold(wake.name, v, false), 220);
   }
 
   async function onSave() {
-    await state.setThreshold(wake.name, local, true);
-    dirty = false;
+    await app.setThreshold(wake.name, local, true);
+    pending = undefined;
   }
 
   async function onRemove() {
     if (!confirm(`Remove wakeword "${wake.name}"? The model file on disk is preserved.`)) return;
-    await state.remove(wake.name);
+    await app.remove(wake.name);
   }
 </script>
 
@@ -68,7 +66,7 @@
         class="toggle hair label-tracked font-semibold px-2.5 py-1 cursor-pointer transition"
         class:on={wake.enabled}
         class:off={!wake.enabled}
-        onclick={() => state.toggle(wake.name, !wake.enabled)}
+        onclick={() => app.toggle(wake.name, !wake.enabled)}
         title={wake.enabled ? "Disable" : "Enable"}
       >
         {wake.enabled ? "ON" : "OFF"}

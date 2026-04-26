@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { state } from "$lib/state.svelte";
+  import { app } from "$lib/app.svelte";
 </script>
 
-{#if state.toast}
-  {@const t = state.toast}
+{#if app.toast}
+  {@const t = app.toast}
   <div class="toast hair" class:error={t.isError} role="status">{t.msg}</div>
 {/if}
 

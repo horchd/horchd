@@ -3,6 +3,9 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 // Tauri lifts these env vars from `tauri.conf.json` during dev.
+// `process` is provided by the Node runtime that runs Vite — declared
+// inline to avoid pulling in `@types/node` for one variable.
+declare const process: { env: Record<string, string | undefined> };
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({

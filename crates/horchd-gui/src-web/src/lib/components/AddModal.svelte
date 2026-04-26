@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { state } from "$lib/state.svelte";
+  import { app } from "$lib/app.svelte";
 
   type Props = { onClose: () => void };
   let { onClose }: Props = $props();
@@ -20,7 +20,7 @@
     }
     busy = true;
     try {
-      await state.add(name.trim(), model.trim(), threshold, cooldown);
+      await app.add(name.trim(), model.trim(), threshold, cooldown);
       onClose();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);

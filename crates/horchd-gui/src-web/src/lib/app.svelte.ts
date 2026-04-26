@@ -138,4 +138,4 @@ function formatErr(e: unknown): string {
   return String(e);
 }
 
-export const state = new HorchdState();
+export const app = new HorchdState();
