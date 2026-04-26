@@ -2,118 +2,922 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>horchd</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>horchd</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,400..900,0..100;1,9..144,400..900,0..100&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
   <style>
+    /* ---------- design tokens ---------- */
     :root {
-      color-scheme: dark;
-      --bg: #0d0e12;
-      --fg: #d8dce3;
-      --muted: #7c8190;
-      --card: #161821;
-      --accent: #82a3ff;
-      --good: #4ade80;
-      --bad: #f87171;
+      --ink:        #0a0a0a;
+      --ink-soft:   #2a2a2a;
+      --paper:      #ece7dd;
+      --paper-2:    #e1ddd1;
+      --paper-3:    #d6d2c5;
+      --rule:       #1a1a1a;
+      --rule-soft:  #b9b3a4;
+      --accent:     #c8311c;
+      --accent-dim: #8c2014;
+      --ok:         #1f5b32;
+      --muted:      #5a564f;
+      --hover:      #d8d3c6;
+
+      --gap-1: 4px;
+      --gap-2: 8px;
+      --gap-3: 12px;
+      --gap-4: 20px;
+      --gap-5: 32px;
+
+      --hair: 1px solid var(--rule);
+      --hair-soft: 1px solid var(--rule-soft);
+
+      --display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      --mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --ink:        #ece7dd;
+        --ink-soft:   #c4bfb3;
+        --paper:      #14130f;
+        --paper-2:    #1c1b16;
+        --paper-3:    #25231d;
+        --rule:       #d6d2c5;
+        --rule-soft:  #4a463d;
+        --accent:     #ee5a45;
+        --accent-dim: #a13724;
+        --ok:         #6cb27e;
+        --muted:      #8a857a;
+        --hover:      #25231d;
+      }
+    }
+
+    /* ---------- reset ---------- */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+    input { font: inherit; color: inherit; }
+
+    /* ---------- base ---------- */
     body {
-      font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      margin: 0; padding: 16px;
-      background: var(--bg); color: var(--fg);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--ink);
+      background: var(--paper);
+      background-image:
+        radial-gradient(circle at 20% 0%, color-mix(in oklab, var(--paper) 92%, var(--paper-3)) 0%, transparent 60%),
+        radial-gradient(circle at 100% 100%, color-mix(in oklab, var(--paper) 92%, var(--accent) 6%) 0%, transparent 55%);
+      letter-spacing: 0.005em;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "tnum" 1, "lnum" 1, "ss01" 1;
+      overflow-y: scroll;
     }
-    h1 { font-size: 18px; margin: 0 0 12px; font-weight: 600; }
-    .status { display: flex; gap: 16px; margin-bottom: 16px; color: var(--muted); }
-    .badge { padding: 2px 8px; border-radius: 4px; background: var(--card); }
-    .badge.good { color: var(--good); }
-    .badge.bad  { color: var(--bad);  }
-    .card {
-      background: var(--card);
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 8px;
+
+    /* page-load stagger */
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .stagger > * {
+      opacity: 0;
+      animation: rise 0.5s cubic-bezier(.2,.7,.2,1) forwards;
+    }
+    .stagger > *:nth-child(1) { animation-delay: 0ms; }
+    .stagger > *:nth-child(2) { animation-delay: 60ms; }
+    .stagger > *:nth-child(3) { animation-delay: 120ms; }
+    .stagger > *:nth-child(4) { animation-delay: 180ms; }
+    .stagger > *:nth-child(5) { animation-delay: 240ms; }
+    .stagger > *:nth-child(6) { animation-delay: 300ms; }
+
+    /* ---------- layout shell ---------- */
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 28px 32px 64px;
+    }
+
+    /* ---------- masthead ---------- */
+    .masthead {
       display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 12px;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: var(--gap-4);
+      padding-bottom: var(--gap-4);
+      border-bottom: var(--hair);
+    }
+    .wordmark {
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 700;
+      font-variation-settings: "opsz" 144, "SOFT" 30;
+      font-size: 48px;
+      line-height: 0.9;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    .wordmark::after {
+      content: ".";
+      color: var(--accent);
+      font-style: normal;
+    }
+    .tagline {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .pill {
+      display: inline-flex;
       align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border: var(--hair);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 600;
+      background: var(--paper);
     }
-    .card .name { font-weight: 600; }
-    .card .meta { color: var(--muted); font-size: 12px; }
-    button {
-      background: transparent; color: var(--accent); border: 1px solid var(--accent);
-      padding: 4px 10px; border-radius: 4px; cursor: pointer; font: inherit;
+    .pill .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      box-shadow: 0 0 0 0 currentColor;
     }
-    button:hover { background: var(--accent); color: #000; }
-    .row-actions { display: flex; gap: 8px; }
-    .empty { color: var(--muted); padding: 32px; text-align: center; }
+    .pill.is-running .dot {
+      background: var(--ok);
+      animation: pulse 2.6s ease-in-out infinite;
+    }
+    .pill.is-running { color: var(--ok); border-color: currentColor; }
+    .pill.is-stopped { color: var(--accent); border-color: currentColor; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+      50%      { box-shadow: 0 0 0 4px transparent; opacity: 0.55; }
+    }
+
+    /* ---------- hero readout ---------- */
+    .readout {
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr;
+      gap: var(--gap-5);
+      padding: var(--gap-5) 0 28px;
+      border-bottom: var(--hair);
+      align-items: stretch;
+    }
+    .readout .divider { background: var(--rule-soft); }
+    .gauge .label {
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: var(--gap-2);
+    }
+    .gauge .value {
+      font-family: var(--display);
+      font-weight: 700;
+      font-variation-settings: "opsz" 144, "SOFT" 0;
+      font-size: 64px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      color: var(--ink);
+      transition: color 0.3s ease;
+    }
+    .gauge .unit {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-left: 8px;
+    }
+    .gauge .value.dim { color: var(--muted); }
+
+    .spark {
+      margin-top: 14px;
+      display: flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 28px;
+      border-bottom: var(--hair-soft);
+    }
+    .spark .bar {
+      flex: 1;
+      min-width: 2px;
+      background: var(--ink-soft);
+      transition: height 0.3s ease, background 0.3s ease;
+    }
+    .spark .bar.peak { background: var(--accent); }
+
+    /* ---------- section heading ---------- */
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 0 var(--gap-3);
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .section-head .meta {
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ---------- wakeword cards ---------- */
+    .wakes { display: flex; flex-direction: column; gap: 0; }
+    .empty {
+      padding: 56px 32px;
+      text-align: center;
+      color: var(--muted);
+      border: var(--hair);
+      font-family: var(--display);
+      font-size: 18px;
+      font-style: italic;
+    }
+    .empty code {
+      font-family: var(--mono);
+      font-style: normal;
+      font-size: 13px;
+      padding: 2px 6px;
+      border: var(--hair-soft);
+      background: var(--paper-2);
+    }
+
+    .wake {
+      border: var(--hair);
+      border-bottom: 0;
+      background: var(--paper);
+      padding: var(--gap-4) var(--gap-4) var(--gap-3);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      grid-template-rows: auto auto;
+      gap: 4px var(--gap-3);
+      transition: background 0.2s ease, border-color 0.4s ease;
+      position: relative;
+    }
+    .wake:last-child { border-bottom: var(--hair); }
+    .wake.is-disabled .name,
+    .wake.is-disabled .meta,
+    .wake.is-disabled .stats { opacity: 0.46; }
+    .wake.flash { animation: flash 0.9s cubic-bezier(.2,.7,.2,1); }
+    @keyframes flash {
+      0%   { background: color-mix(in oklab, var(--accent) 22%, var(--paper)); border-color: var(--accent); }
+      100% { background: var(--paper); border-color: var(--rule); }
+    }
+
+    .wake .marker {
+      grid-column: 1; grid-row: 1 / span 2;
+      width: 5px;
+      align-self: stretch;
+      background: var(--rule);
+      transition: background 0.4s ease, opacity 0.2s ease;
+    }
+    .wake.is-disabled .marker { opacity: 0.35; }
+    .wake.fired .marker { background: var(--accent); }
+
+    .wake .name {
+      grid-column: 2; grid-row: 1;
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 17px;
+      letter-spacing: 0.01em;
+      color: var(--ink);
+      align-self: end;
+    }
+    .wake .actions {
+      grid-column: 3; grid-row: 1;
+      display: flex; align-items: center; gap: var(--gap-2);
+      align-self: end;
+    }
+    .toggle {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border: var(--hair);
+      transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    }
+    .toggle:hover { background: var(--ink); color: var(--paper); }
+    .toggle:active { transform: scale(0.97); }
+    .toggle.on { color: var(--ok); border-color: var(--ok); }
+    .toggle.off { color: var(--muted); }
+    .icon-btn {
+      width: 26px; height: 26px;
+      display: inline-grid; place-items: center;
+      border: var(--hair);
+      transition: background 0.18s ease, color 0.18s ease;
+      color: var(--muted);
+    }
+    .icon-btn:hover { background: var(--ink); color: var(--paper); }
+    .icon-btn.danger:hover { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+
+    .wake .body {
+      grid-column: 2 / span 2; grid-row: 2;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--gap-3);
+      align-items: end;
+      margin-top: var(--gap-2);
+    }
+    .field-label {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .field-label .val {
+      font-family: var(--display);
+      font-weight: 600;
+      font-variation-settings: "opsz" 14;
+      letter-spacing: -0.01em;
+      font-size: 16px;
+      color: var(--ink);
+    }
+    .slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 18px;
+      background: transparent;
+      cursor: ew-resize;
+    }
+    .slider::-webkit-slider-runnable-track {
+      height: 1px;
+      background: var(--rule);
+    }
+    .slider::-moz-range-track { height: 1px; background: var(--rule); }
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 12px; height: 14px;
+      background: var(--ink);
+      border: 0;
+      margin-top: -7px;
+      transition: background 0.18s ease, transform 0.18s ease;
+    }
+    .slider::-moz-range-thumb {
+      width: 12px; height: 14px;
+      background: var(--ink); border: 0; border-radius: 0;
+      transition: background 0.18s ease, transform 0.18s ease;
+    }
+    .slider:hover::-webkit-slider-thumb,
+    .slider:focus::-webkit-slider-thumb { background: var(--accent); }
+    .slider:hover::-moz-range-thumb,
+    .slider:focus::-moz-range-thumb { background: var(--accent); }
+
+    .wake .stats {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: var(--gap-3);
+      grid-column: 2 / span 2;
+      display: flex; gap: var(--gap-4); flex-wrap: wrap;
+    }
+    .wake .stats span b {
+      font-weight: 500;
+      color: var(--ink-soft);
+      font-variant-numeric: tabular-nums;
+    }
+    .wake .stats .model {
+      font-family: var(--mono);
+      direction: rtl;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+    .wake .save-btn {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 2px 6px;
+      border: 1px dashed var(--rule-soft);
+      transition: color 0.18s ease, border-color 0.18s ease;
+      margin-left: 8px;
+    }
+    .wake .save-btn.dirty { color: var(--accent); border-color: var(--accent); border-style: solid; }
+    .wake .save-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+    /* ---------- footer actions + ticker ---------- */
+    .actions-bar {
+      display: flex;
+      gap: var(--gap-2);
+      padding: var(--gap-4) 0 var(--gap-2);
+      border-bottom: var(--hair);
+    }
+    .btn {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      padding: 10px 18px;
+      border: var(--hair);
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    .btn:hover { background: var(--ink); color: var(--paper); }
+    .btn.primary { background: var(--ink); color: var(--paper); }
+    .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+    .btn .glyph { display: inline-block; margin-right: 6px; }
+
+    .ticker {
+      padding: var(--gap-4) 0;
+      display: flex;
+      gap: var(--gap-3);
+      align-items: center;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      min-height: 32px;
+    }
+    .ticker .heading {
+      letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600;
+      color: var(--ink); flex: none;
+    }
+    .ticker .events {
+      display: flex; gap: var(--gap-4); overflow: hidden; flex: 1; min-width: 0;
+    }
+    .ticker .event {
+      display: inline-flex; gap: 8px; align-items: baseline;
+      font-variant-numeric: tabular-nums;
+      animation: enter 0.4s ease;
+      white-space: nowrap;
+    }
+    .ticker .event b {
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .ticker .event .score {
+      font-family: var(--display);
+      font-weight: 600;
+      color: var(--accent);
+    }
+    @keyframes enter {
+      from { transform: translateX(8px); opacity: 0; }
+      to   { transform: none; opacity: 1; }
+    }
+    .ticker .event.fade { animation: fade 1.6s ease forwards; }
+    @keyframes fade { to { opacity: 0.45; } }
+
+    /* ---------- modal ---------- */
+    .scrim {
+      position: fixed; inset: 0;
+      background: color-mix(in oklab, var(--paper) 30%, transparent);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: none;
+      place-items: center;
+      z-index: 50;
+      animation: fadein 0.2s ease;
+    }
+    .scrim.open { display: grid; }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+      width: min(440px, calc(100vw - 32px));
+      background: var(--paper);
+      border: var(--hair);
+      padding: 28px 28px 24px;
+      box-shadow: 8px 8px 0 var(--ink);
+    }
+    .modal h3 {
+      margin: 0 0 var(--gap-4);
+      font-family: var(--display);
+      font-style: italic;
+      font-weight: 700;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .modal .field { margin-bottom: var(--gap-3); }
+    .modal label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .modal input[type="text"],
+    .modal input[type="number"] {
+      width: 100%;
+      padding: 8px 10px;
+      background: var(--paper-2);
+      border: var(--hair);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+    .modal input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .modal .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-3); }
+    .modal-actions {
+      display: flex; justify-content: flex-end; gap: var(--gap-2); margin-top: var(--gap-4);
+    }
+
+    /* ---------- toast ---------- */
+    .toast {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      padding: 10px 18px;
+      border: var(--hair);
+      background: var(--paper);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      box-shadow: 4px 4px 0 var(--ink);
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%); }
+    .toast.error { color: var(--accent); border-color: var(--accent); box-shadow: 4px 4px 0 var(--accent-dim); }
+
+    /* ---------- skeletons ---------- */
+    .skel {
+      display: inline-block;
+      background: linear-gradient(90deg, var(--paper-2), var(--paper-3), var(--paper-2));
+      background-size: 240% 100%;
+      animation: shimmer 1.6s ease-in-out infinite;
+      vertical-align: middle;
+    }
+    @keyframes shimmer { 0%{background-position: 100% 0;} 100%{background-position: -100% 0;} }
   </style>
 </head>
 <body>
-  <h1>horchd</h1>
-  <div class="status">
-    <span id="state" class="badge">…</span>
-    <span class="badge">audio <span id="audio-fps">…</span> fps</span>
-    <span class="badge">score <span id="score-fps">…</span> fps</span>
+  <main>
+    <div class="stagger">
+      <header class="masthead">
+        <div>
+          <div class="wordmark">horchd</div>
+          <div class="tagline">Wakeword Detection · Session Bus</div>
+        </div>
+        <div id="state-pill" class="pill is-stopped">
+          <span class="dot"></span><span id="state-label">checking</span>
+        </div>
+      </header>
+
+      <section class="readout">
+        <div class="gauge">
+          <div class="label">Audio capture</div>
+          <div>
+            <span id="audio-fps" class="value">—</span><span class="unit">fps</span>
+          </div>
+          <div id="audio-spark" class="spark" aria-hidden="true"></div>
+        </div>
+        <div class="divider"></div>
+        <div class="gauge">
+          <div class="label">Inference</div>
+          <div>
+            <span id="score-fps" class="value">—</span><span class="unit">fps</span>
+          </div>
+          <div id="score-spark" class="spark" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <div class="section-head">
+        <h2>Wakewords</h2>
+        <div class="meta"><span id="wake-count">0</span> loaded</div>
+      </div>
+
+      <section id="wakes" class="wakes"></section>
+
+      <div class="actions-bar">
+        <button id="add-btn" class="btn primary"><span class="glyph">+</span>Add wakeword</button>
+        <button id="reload-btn" class="btn"><span class="glyph">⟳</span>Reload config</button>
+      </div>
+
+      <section class="ticker" aria-live="polite">
+        <span class="heading">Recent fires</span>
+        <div id="events" class="events">
+          <span class="event" style="opacity:.45">— none yet —</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Add modal -->
+  <div id="scrim" class="scrim" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <form id="add-form" class="modal">
+      <h3 id="modal-title">Add wakeword.</h3>
+      <div class="field">
+        <label for="add-name">Name</label>
+        <input id="add-name" type="text" required autocomplete="off" placeholder="lyna">
+      </div>
+      <div class="field">
+        <label for="add-model">Model path (.onnx)</label>
+        <input id="add-model" type="text" required spellcheck="false" placeholder="~/.local/share/horchd/models/lyna.onnx">
+      </div>
+      <div class="field row">
+        <div>
+          <label for="add-threshold">Threshold</label>
+          <input id="add-threshold" type="number" step="0.01" min="0" max="1" value="0.5">
+        </div>
+        <div>
+          <label for="add-cooldown">Cooldown (ms)</label>
+          <input id="add-cooldown" type="number" step="100" min="0" value="1500">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Register</button>
+      </div>
+    </form>
   </div>
-  <div id="wakes"></div>
+
+  <div id="toast" class="toast" role="status"></div>
 
   <script type="module">
-    // Tauri 2 invoke; works only when served by tauri (or via @tauri-apps/api/core).
-    const invoke = window.__TAURI__?.core?.invoke
-      ?? (async () => { throw new Error("not running inside Tauri"); });
+    /* ----- Tauri shims (fall back to mocks for plain-browser preview) ----- */
+    const tauri = window.__TAURI__;
+    const invoke = tauri?.core?.invoke ?? (async (cmd, args) => {
+      // dev-only mock
+      console.warn("[mock]", cmd, args);
+      switch (cmd) {
+        case "get_status": return { running: true, audio_fps: 12.46 + Math.random() * 0.1, score_fps: 12.40 + Math.random() * 0.1 };
+        case "list_wakewords": return [
+          { name: "lyna", threshold: 0.50, model: "~/.local/share/horchd/models/lyna.onnx", enabled: true, cooldown_ms: 1500 },
+          { name: "hey_jarvis", threshold: 0.65, model: "~/.local/share/horchd/models/hey_jarvis_v0.1.onnx", enabled: true, cooldown_ms: 1500 },
+          { name: "wetter", threshold: 0.55, model: "~/.local/share/horchd/models/wetter.onnx", enabled: false, cooldown_ms: 2000 },
+        ];
+        default: return null;
+      }
+    });
+    const listen = tauri?.event?.listen ?? (async () => () => {});
 
-    async function refresh() {
+    /* ----- state ----- */
+    const state = {
+      lastFire: new Map(),     // name -> {score, ts_ms}
+      pendingThresholds: new Map(), // name -> dirty value
+      audioHistory: [],        // fps samples
+      scoreHistory: [],
+      fireBuffer: [],          // recent fires for ticker
+    };
+    const HISTORY = 48;        // ~1.6 minutes at 2s polling
+
+    /* ----- helpers ----- */
+    const fmtFloat = (v, d = 2) => Number.isFinite(v) ? v.toFixed(d) : "—";
+    const elapsed = (ts) => {
+      if (!ts) return "never";
+      const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+      if (s < 5) return "just now";
+      if (s < 60) return `${s} s ago`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m} min ago`;
+      const h = Math.floor(m / 60);
+      return `${h} h ago`;
+    };
+    const shortPath = (p, n = 36) => {
+      if (!p || p.length <= n) return p;
+      return "…" + p.slice(p.length - n + 1);
+    };
+    const toast = (msg, isError = false) => {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.toggle("error", isError);
+      el.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("show"), 2200);
+    };
+
+    /* ----- spark renderer ----- */
+    function renderSpark(rootId, history) {
+      const root = document.getElementById(rootId);
+      if (!root.children.length) {
+        for (let i = 0; i < HISTORY; i++) {
+          const b = document.createElement("div");
+          b.className = "bar";
+          b.style.height = "0px";
+          root.appendChild(b);
+        }
+      }
+      const max = Math.max(0.001, ...history, 14);
+      const last = history.length ? history[history.length - 1] : 0;
+      Array.from(root.children).forEach((bar, i) => {
+        const idx = i - (HISTORY - history.length);
+        const v = idx >= 0 ? history[idx] : 0;
+        const h = Math.max(1, Math.round((v / max) * 26));
+        bar.style.height = h + "px";
+        bar.classList.toggle("peak", v === last && v > 0);
+      });
+    }
+
+    /* ----- status / fps ----- */
+    async function pollStatus() {
       try {
-        const status = await invoke("get_status");
-        document.getElementById("state").textContent =
-          status.running ? "running" : "stopped";
-        document.getElementById("state").className =
-          "badge " + (status.running ? "good" : "bad");
-        document.getElementById("audio-fps").textContent = status.audio_fps.toFixed(2);
-        document.getElementById("score-fps").textContent = status.score_fps.toFixed(2);
-
-        const wakes = await invoke("list_wakewords");
-        const root = document.getElementById("wakes");
-        if (wakes.length === 0) {
-          root.innerHTML = '<div class="empty">No wakewords configured. Use <code>horchctl add</code>.</div>';
-          return;
-        }
-        root.innerHTML = "";
-        for (const w of wakes) {
-          const card = document.createElement("div");
-          card.className = "card";
-          card.innerHTML = `
-            <div>
-              <div class="name">${w.name}</div>
-              <div class="meta">threshold ${w.threshold.toFixed(3)} · cooldown ${w.cooldown_ms} ms · ${w.model}</div>
-            </div>
-            <div class="row-actions">
-              <button data-action="toggle" data-name="${w.name}" data-enabled="${w.enabled}">
-                ${w.enabled ? "Disable" : "Enable"}
-              </button>
-            </div>
-          `;
-          root.appendChild(card);
-        }
-      } catch (err) {
-        document.getElementById("wakes").innerHTML =
-          `<div class="empty">D-Bus error: ${err}</div>`;
+        const s = await invoke("get_status");
+        document.getElementById("audio-fps").textContent = fmtFloat(s.audio_fps);
+        document.getElementById("score-fps").textContent = fmtFloat(s.score_fps);
+        const pill = document.getElementById("state-pill");
+        const label = document.getElementById("state-label");
+        if (s.running) { pill.className = "pill is-running"; label.textContent = "running"; }
+        else { pill.className = "pill is-stopped"; label.textContent = "stopped"; }
+        state.audioHistory.push(s.audio_fps); if (state.audioHistory.length > HISTORY) state.audioHistory.shift();
+        state.scoreHistory.push(s.score_fps); if (state.scoreHistory.length > HISTORY) state.scoreHistory.shift();
+        renderSpark("audio-spark", state.audioHistory);
+        renderSpark("score-spark", state.scoreHistory);
+      } catch (e) {
+        document.getElementById("state-pill").className = "pill is-stopped";
+        document.getElementById("state-label").textContent = "no daemon";
+        document.getElementById("audio-fps").textContent = "—";
+        document.getElementById("score-fps").textContent = "—";
+        document.getElementById("audio-fps").classList.add("dim");
+        document.getElementById("score-fps").classList.add("dim");
       }
     }
 
-    document.addEventListener("click", async (ev) => {
-      const t = ev.target;
-      if (t.tagName !== "BUTTON" || t.dataset.action !== "toggle") return;
-      const name = t.dataset.name;
-      const enabling = t.dataset.enabled !== "true";
+    /* ----- wakeword cards ----- */
+    async function loadWakes() {
       try {
-        await invoke("set_enabled", { name, enabled: enabling, save: false });
-        await refresh();
-      } catch (err) {
-        alert("toggle failed: " + err);
+        const wakes = await invoke("list_wakewords");
+        document.getElementById("wake-count").textContent = wakes.length;
+        renderWakes(wakes);
+      } catch (e) {
+        toast(`load failed: ${e}`, true);
+      }
+    }
+
+    function renderWakes(wakes) {
+      const root = document.getElementById("wakes");
+      root.innerHTML = "";
+      if (wakes.length === 0) {
+        root.innerHTML = `<div class="empty">No wakewords. Use <code>horchctl add</code> or the button below.</div>`;
+        return;
+      }
+      for (const w of wakes) {
+        const card = document.createElement("article");
+        card.className = "wake" + (w.enabled ? "" : " is-disabled");
+        card.dataset.name = w.name;
+        const lastFire = state.lastFire.get(w.name);
+        card.innerHTML = `
+          <div class="marker"></div>
+          <div class="name">${escapeHtml(w.name)}</div>
+          <div class="actions">
+            <button class="toggle ${w.enabled ? "on" : "off"}" data-action="toggle" title="${w.enabled ? "Disable" : "Enable"}">${w.enabled ? "ON" : "OFF"}</button>
+            <button class="icon-btn danger" data-action="remove" title="Remove">×</button>
+          </div>
+          <div class="body">
+            <div>
+              <div class="field-label"><span>Threshold</span><span class="val" data-role="threshold-val">${w.threshold.toFixed(3)}</span></div>
+              <input class="slider" type="range" min="0" max="1" step="0.01" value="${w.threshold}" data-role="threshold" data-name="${escapeAttr(w.name)}">
+            </div>
+            <button class="save-btn" data-action="save-threshold" title="Persist threshold to config.toml">Save</button>
+          </div>
+          <div class="stats">
+            <span>Cooldown · <b>${w.cooldown_ms} ms</b></span>
+            <span>Last fire · <b data-role="last-fire">${lastFire ? elapsed(lastFire.ts_ms) : "never"}</b></span>
+            <span class="model" title="${escapeAttr(w.model)}">${escapeHtml(shortPath(w.model, 50))}</span>
+          </div>
+        `;
+        root.appendChild(card);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+      }[c]));
+    }
+    const escapeAttr = escapeHtml;
+
+    /* ----- card interactions ----- */
+    document.getElementById("wakes").addEventListener("click", async (ev) => {
+      const card = ev.target.closest(".wake");
+      if (!card) return;
+      const name = card.dataset.name;
+      const action = ev.target.dataset.action;
+      if (action === "toggle") {
+        const enabling = ev.target.classList.contains("off");
+        try {
+          await invoke("set_enabled", { name, enabled: enabling, save: false });
+          await loadWakes();
+        } catch (e) { toast(`toggle failed: ${e}`, true); }
+      } else if (action === "remove") {
+        if (!confirm(`Remove wakeword "${name}"? The model file on disk is preserved.`)) return;
+        try {
+          await invoke("remove_wakeword", { name });
+          toast(`removed ${name}`);
+          await loadWakes();
+        } catch (e) { toast(`remove failed: ${e}`, true); }
+      } else if (action === "save-threshold") {
+        const slider = card.querySelector("[data-role=threshold]");
+        const val = parseFloat(slider.value);
+        try {
+          await invoke("set_threshold", { name, value: val, save: true });
+          state.pendingThresholds.delete(name);
+          ev.target.classList.remove("dirty");
+          toast(`saved ${name} = ${val.toFixed(3)}`);
+        } catch (e) { toast(`save failed: ${e}`, true); }
       }
     });
 
-    refresh();
-    setInterval(refresh, 2000);
+    document.getElementById("wakes").addEventListener("input", (ev) => {
+      if (ev.target.dataset.role !== "threshold") return;
+      const card = ev.target.closest(".wake");
+      const valEl = card.querySelector("[data-role=threshold-val]");
+      const v = parseFloat(ev.target.value);
+      valEl.textContent = v.toFixed(3);
+      state.pendingThresholds.set(card.dataset.name, v);
+      card.querySelector(".save-btn").classList.add("dirty");
+      // Debounced transient apply
+      clearTimeout(ev.target._t);
+      ev.target._t = setTimeout(async () => {
+        try { await invoke("set_threshold", { name: card.dataset.name, value: v, save: false }); }
+        catch (e) { toast(`apply failed: ${e}`, true); }
+      }, 220);
+    });
+
+    /* ----- add modal ----- */
+    const scrim = document.getElementById("scrim");
+    document.getElementById("add-btn").addEventListener("click", () => {
+      scrim.classList.add("open");
+      document.getElementById("add-name").focus();
+    });
+    scrim.addEventListener("click", (ev) => { if (ev.target === scrim || ev.target.dataset.close !== undefined) scrim.classList.remove("open"); });
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && scrim.classList.contains("open")) scrim.classList.remove("open"); });
+    document.getElementById("add-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const name = document.getElementById("add-name").value.trim();
+      const model = document.getElementById("add-model").value.trim();
+      const threshold = parseFloat(document.getElementById("add-threshold").value);
+      const cooldown = parseInt(document.getElementById("add-cooldown").value, 10);
+      try {
+        await invoke("add_wakeword", { name, model, threshold, cooldownMs: cooldown });
+        scrim.classList.remove("open");
+        toast(`added ${name}`);
+        ev.target.reset();
+        document.getElementById("add-threshold").value = "0.5";
+        document.getElementById("add-cooldown").value = "1500";
+        await loadWakes();
+      } catch (e) {
+        toast(`add failed: ${e}`, true);
+      }
+    });
+
+    /* ----- reload ----- */
+    document.getElementById("reload-btn").addEventListener("click", async () => {
+      try { await invoke("reload"); toast("reloaded"); await loadWakes(); }
+      catch (e) { toast(`reload failed: ${e}`, true); }
+    });
+
+    /* ----- Detected events ----- */
+    listen("horchd://detected", ({ payload }) => {
+      const ts = payload.received_unix_ms ?? Date.now();
+      state.lastFire.set(payload.name, { score: payload.score, ts_ms: ts });
+      // Card flash
+      const card = document.querySelector(`.wake[data-name="${CSS.escape(payload.name)}"]`);
+      if (card) {
+        card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+        card.classList.add("fired");
+        setTimeout(() => card?.classList.remove("fired"), 600);
+        const lastEl = card.querySelector("[data-role=last-fire]");
+        if (lastEl) lastEl.textContent = "just now";
+      }
+      // Ticker
+      pushFire(payload);
+    });
+
+    function pushFire(payload) {
+      const events = document.getElementById("events");
+      // wipe placeholder
+      const placeholder = events.querySelector("span:not(.event), .event[data-placeholder]");
+      if (placeholder) placeholder.remove();
+      const node = document.createElement("span");
+      node.className = "event";
+      node.innerHTML = `<b>${escapeHtml(payload.name)}</b> <span class="score">${(payload.score).toFixed(3)}</span> <span>· ${elapsed(payload.received_unix_ms ?? Date.now())}</span>`;
+      events.prepend(node);
+      while (events.children.length > 6) events.lastElementChild.remove();
+      setTimeout(() => node.classList.add("fade"), 4000);
+    }
+
+    /* ----- live "elapsed" tick ----- */
+    setInterval(() => {
+      document.querySelectorAll(".wake").forEach(card => {
+        const lf = state.lastFire.get(card.dataset.name);
+        const el = card.querySelector("[data-role=last-fire]");
+        if (el) el.textContent = lf ? elapsed(lf.ts_ms) : "never";
+      });
+    }, 1000);
+
+    /* ----- boot ----- */
+    pollStatus();
+    loadWakes();
+    setInterval(pollStatus, 1000);
+    setInterval(loadWakes, 5000);
   </script>
 </body>
 </html>

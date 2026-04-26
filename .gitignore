@@ -4,3 +4,6 @@
 /tasks/
 /plan.md
 /shared-models/*.onnx
+# Tauri auto-generates these on every build
+/crates/horchd-gui/gen/
+/crates/horchd-gui/icons/.gitkeep

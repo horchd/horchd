@@ -31,13 +31,15 @@ pub async fn list_wakewords() -> Result<Vec<WakewordRow>, String> {
     let raw = p.list_wakewords().await.map_err(|e| err(e.into()))?;
     Ok(raw
         .into_iter()
-        .map(|(name, threshold, model, enabled, cooldown_ms)| WakewordRow {
-            name,
-            threshold,
-            model,
-            enabled,
-            cooldown_ms,
-        })
+        .map(
+            |(name, threshold, model, enabled, cooldown_ms)| WakewordRow {
+                name,
+                threshold,
+                model,
+                enabled,
+                cooldown_ms,
+            },
+        )
         .collect())
 }
 

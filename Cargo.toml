@@ -1,7 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/horchctl", "crates/horchd", "crates/horchd-core"]
-# Future: "crates/horchd-gui" (Tauri tray + control panel)
+members = [
+    "crates/horchctl",
+    "crates/horchd",
+    "crates/horchd-core",
+    "crates/horchd-gui",
+]
 
 [workspace.package]
 version = "0.1.0"

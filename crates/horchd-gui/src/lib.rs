@@ -2,11 +2,13 @@
 //!
 //! All daemon interaction goes through `dbus_client`, which constructs a
 //! [`horchd_core::DaemonProxy`] and exposes async helpers to the Tauri
-//! command layer. The frontend (whatever stack — vanilla HTML during the
-//! scaffold phase, SvelteKit later) calls these via `tauri.invoke()`.
+//! command layer. The frontend (vanilla HTML during the scaffold phase,
+//! SvelteKit once that migration lands) calls these via `tauri.invoke()`
+//! and listens to the `horchd://detected` event for live fires.
 
 mod commands;
 mod dbus_client;
+mod events;
 mod tray;
 
 use tracing_subscriber::EnvFilter;
@@ -24,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             tray::install(app)?;
+            events::spawn(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
