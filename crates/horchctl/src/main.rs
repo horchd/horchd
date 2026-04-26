@@ -1,5 +1,7 @@
-use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+use anyhow::{Context, Result, bail};
+use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;
 use horchd_core::DaemonProxy;
 
@@ -22,6 +24,66 @@ enum Command {
     List,
     /// Subscribe to the `Detected` signal and print one line per fire.
     Monitor,
+
+    /// Set a wakeword's threshold. Transient by default; pass `--save` to persist to TOML.
+    Threshold(ThresholdArgs),
+    /// Set a wakeword's cooldown in milliseconds. Use `--save` to persist.
+    Cooldown(CooldownArgs),
+    /// Enable a wakeword.
+    Enable(NameOnly),
+    /// Disable a wakeword (the model stays loaded, just stops firing).
+    Disable(NameOnly),
+
+    /// Register a new wakeword. Validates the model and persists to TOML.
+    Add {
+        name: String,
+        #[arg(long)]
+        model: PathBuf,
+        #[arg(long, default_value_t = 0.5)]
+        threshold: f64,
+        #[arg(long, default_value_t = 1500)]
+        cooldown: u32,
+    },
+    /// Remove a wakeword. The on-disk model file is preserved unless `--purge`.
+    Remove {
+        name: String,
+        #[arg(long)]
+        purge: bool,
+    },
+
+    /// Re-read the config file and reconcile in-memory state.
+    Reload,
+}
+
+#[derive(Debug, Args)]
+struct ThresholdArgs {
+    /// Wakeword name as defined in the config.
+    name: String,
+    /// New threshold value (typically in `[0, 1]`).
+    value: f64,
+    /// Persist the change back to `config.toml` (preserves comments).
+    #[arg(long)]
+    save: bool,
+}
+
+#[derive(Debug, Args)]
+struct CooldownArgs {
+    /// Wakeword name as defined in the config.
+    name: String,
+    /// New cooldown in milliseconds.
+    value: u32,
+    /// Persist the change back to `config.toml` (preserves comments).
+    #[arg(long)]
+    save: bool,
+}
+
+#[derive(Debug, Args)]
+struct NameOnly {
+    /// Wakeword name as defined in the config.
+    name: String,
+    /// Persist the change back to `config.toml`.
+    #[arg(long)]
+    save: bool,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -38,7 +100,100 @@ async fn main() -> Result<()> {
         Command::Status => status(&proxy).await,
         Command::List => list(&proxy).await,
         Command::Monitor => monitor(&proxy).await,
+        Command::Threshold(args) => {
+            proxy
+                .set_threshold(&args.name, args.value, args.save)
+                .await
+                .with_context(|| format!("SetThreshold({:?}, {})", args.name, args.value))?;
+            println!("threshold of {:?} set to {}", args.name, args.value);
+            Ok(())
+        }
+        Command::Cooldown(args) => {
+            proxy
+                .set_cooldown(&args.name, args.value, args.save)
+                .await
+                .with_context(|| format!("SetCooldown({:?}, {})", args.name, args.value))?;
+            println!("cooldown of {:?} set to {} ms", args.name, args.value);
+            Ok(())
+        }
+        Command::Enable(args) => {
+            proxy
+                .set_enabled(&args.name, true, args.save)
+                .await
+                .with_context(|| format!("SetEnabled({:?}, true)", args.name))?;
+            println!("{:?} enabled", args.name);
+            Ok(())
+        }
+        Command::Disable(args) => {
+            proxy
+                .set_enabled(&args.name, false, args.save)
+                .await
+                .with_context(|| format!("SetEnabled({:?}, false)", args.name))?;
+            println!("{:?} disabled", args.name);
+            Ok(())
+        }
+        Command::Add {
+            name,
+            model,
+            threshold,
+            cooldown,
+        } => {
+            let model_str = model
+                .to_str()
+                .context("model path is not valid UTF-8")?
+                .to_owned();
+            proxy
+                .add(&name, &model_str, threshold, cooldown)
+                .await
+                .with_context(|| format!("Add({name:?}, {model_str:?})"))?;
+            println!("added wakeword {name:?} (model {model_str})");
+            Ok(())
+        }
+        Command::Remove { name, purge } => {
+            // Snapshot before we remove so we know the on-disk model path.
+            let model_path = if purge {
+                proxy.list_wakewords().await.ok().and_then(|wakes| {
+                    wakes
+                        .into_iter()
+                        .find(|(n, ..)| n == &name)
+                        .map(|(_, _, m, _, _)| m)
+                })
+            } else {
+                None
+            };
+            proxy
+                .remove(&name)
+                .await
+                .with_context(|| format!("Remove({name:?})"))?;
+            println!("removed wakeword {name:?}");
+            if let Some(path) = model_path {
+                purge_model(&path)?;
+            }
+            Ok(())
+        }
+        Command::Reload => {
+            proxy.reload().await.context("Reload")?;
+            println!("reloaded");
+            Ok(())
+        }
     }
+}
+
+fn purge_model(model_path: &str) -> Result<()> {
+    let path = PathBuf::from(model_path);
+    if !path.exists() {
+        eprintln!("note: model file {model_path} did not exist on disk");
+        return Ok(());
+    }
+    std::fs::remove_file(&path).with_context(|| format!("deleting model {model_path}"))?;
+    println!("purged model file {model_path}");
+    let sidecar = path.with_extension("onnx.data");
+    if sidecar.exists() {
+        std::fs::remove_file(&sidecar)
+            .with_context(|| format!("deleting sidecar {}", sidecar.display()))?;
+        println!("purged sidecar {}", sidecar.display());
+    }
+    Ok(())
 }
 
 async fn status(proxy: &DaemonProxy<'_>) -> Result<()> {
@@ -121,7 +276,7 @@ async fn monitor(proxy: &DaemonProxy<'_>) -> Result<()> {
                         "{:<10.6}  {:<24}  ts={}",
                         args.score, args.name, args.timestamp_us,
                     ),
-                    Err(err) => eprintln!("malformed Detected signal: {err}"),
+                    Err(err) => bail!("malformed Detected signal: {err}"),
                 }
             }
         }

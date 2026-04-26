@@ -13,7 +13,9 @@ use zbus::object_server::SignalEmitter;
 mod audio;
 mod detector;
 mod inference;
+mod persist;
 mod service;
+mod state;
 
 const DBUS_NAME: &str = "xyz.horchd.Daemon";
 const DBUS_PATH: &str = "/xyz/horchd/Daemon";
@@ -22,12 +24,10 @@ const DBUS_PATH: &str = "/xyz/horchd/Daemon";
 /// 16 frames * 80 ms = 1.28 s of headroom against inference back-pressure.
 const AUDIO_CHANNEL_CAPACITY: usize = 16;
 
-/// Broadcast capacity for `Detected` events. 64 fires * cooldown is
-/// minutes of headroom — slow subscribers won't lose anything realistic.
+/// Broadcast capacity for `Detected` events.
 const EVENT_BROADCAST_CAPACITY: usize = 64;
 
-/// Stats log cadence. Quiet enough for an always-on daemon; loud enough
-/// that "is it running?" is one `journalctl --user -fu horchd` away.
+/// Stats log cadence.
 const STATS_LOG_INTERVAL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Parser)]
@@ -85,11 +85,8 @@ async fn main() -> Result<()> {
         .map(|w| inference::Classifier::load(w.name.clone(), &w.model))
         .collect::<Result<Vec<_>>>()
         .context("loading per-wakeword classifiers")?;
-    tracing::info!(
-        loaded = classifiers.len(),
-        names = ?classifiers.iter().map(|c| &c.name).collect::<Vec<_>>(),
-        "classifiers loaded"
-    );
+    tracing::info!(loaded = classifiers.len(), "classifiers loaded");
+
     let detectors: Vec<detector::Detector> = config
         .wakewords
         .iter()
@@ -97,8 +94,13 @@ async fn main() -> Result<()> {
         .collect();
     let pipeline = inference::InferencePipeline::new(preprocessor, classifiers);
 
-    let (audio_handle, frames) = audio::start(&config.engine.device, AUDIO_CHANNEL_CAPACITY)
-        .context("starting audio capture")?;
+    let shared_state = state::DaemonState::new(config, cli.config.clone(), pipeline, detectors);
+
+    let (audio_handle, frames) =
+        audio::start("default", AUDIO_CHANNEL_CAPACITY).context("starting audio capture")?;
+    // The cpal `Stream` inside `audio_handle` is `!Send`; we must keep it
+    // alive on the main thread until shutdown. Re-bind via a name we
+    // don't drop before the shutdown signal.
     let audio_stats = Arc::clone(&audio_handle.stats);
     let inference_stats = Arc::new(inference::InferenceStats::new());
 
@@ -106,8 +108,7 @@ async fn main() -> Result<()> {
 
     tokio::spawn(run_inference(
         frames,
-        pipeline,
-        detectors,
+        Arc::clone(&shared_state),
         event_tx.clone(),
         Arc::clone(&inference_stats),
     ));
@@ -118,8 +119,7 @@ async fn main() -> Result<()> {
     ));
 
     let daemon = service::Daemon::new(
-        config,
-        cli.config.clone(),
+        Arc::clone(&shared_state),
         Arc::clone(&audio_stats),
         Arc::clone(&inference_stats),
     );
@@ -138,19 +138,20 @@ async fn main() -> Result<()> {
     tokio::spawn(emit_signals(conn.clone(), event_tx.subscribe()));
 
     shutdown_signal().await;
+    drop(audio_handle); // explicit: stops the cpal stream
     tracing::info!("shutdown");
     Ok(())
 }
 
 async fn run_inference(
     mut frames: tokio::sync::mpsc::Receiver<audio::Frame>,
-    mut pipeline: inference::InferencePipeline,
-    mut detectors: Vec<detector::Detector>,
+    shared: state::SharedState,
     events: broadcast::Sender<WakewordEvent>,
     stats: Arc<inference::InferenceStats>,
 ) {
     while let Some(frame) = frames.recv().await {
-        let result = tokio::task::block_in_place(|| pipeline.process(&frame));
+        let mut s = shared.lock().await;
+        let result = tokio::task::block_in_place(|| s.pipeline.process(&frame));
         let scores = match result {
             Ok(scores) => scores,
             Err(err) => {
@@ -161,14 +162,17 @@ async fn run_inference(
         stats.record_score();
 
         let now = Instant::now();
-        for (det, (name, score)) in detectors.iter_mut().zip(scores.iter()) {
+        for (det, (name, score)) in s.detectors.iter_mut().zip(scores.iter()) {
             debug_assert_eq!(name, &det.name, "detector/classifier order mismatch");
             let Some(event) = det.update(f64::from(*score), now) else {
                 continue;
             };
-            tracing::info!(name = %event.name, score = event.score, ts_us = event.timestamp_us, "wakeword detected");
-            // Fire-and-forget: send only fails if every receiver has been
-            // dropped, which means no D-Bus subscriber cares right now.
+            tracing::info!(
+                name = %event.name,
+                score = event.score,
+                ts_us = event.timestamp_us,
+                "wakeword detected"
+            );
             let _ = events.send(event);
         }
     }
@@ -212,7 +216,7 @@ async fn log_stats(
     interval: Duration,
 ) {
     let mut tick = tokio::time::interval(interval);
-    tick.tick().await; // skip immediate first tick
+    tick.tick().await;
     loop {
         tick.tick().await;
         tracing::debug!(

@@ -366,6 +366,17 @@ impl InferencePipeline {
         }
         Ok(scores)
     }
+
+    pub fn add_classifier(&mut self, classifier: Classifier) {
+        self.classifiers.push(classifier);
+    }
+
+    /// Removes the named classifier; returns whether one was found.
+    pub fn remove_classifier(&mut self, name: &str) -> bool {
+        let len_before = self.classifiers.len();
+        self.classifiers.retain(|c| c.name != name);
+        self.classifiers.len() != len_before
+    }
 }
 
 #[cfg(test)]
