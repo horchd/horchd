@@ -29,8 +29,12 @@ export const dbus = {
     invoke<void>("set_cooldown", { name, ms, save }),
   add: (name: string, model: string, threshold: number, cooldownMs: number) =>
     invoke<void>("add_wakeword", { name, model, threshold, cooldownMs }),
+  /** Copies `sourcePath` into the canonical models dir, then registers. */
+  import: (name: string, sourcePath: string, threshold: number, cooldownMs: number) =>
+    invoke<string>("import_wakeword", { name, sourcePath, threshold, cooldownMs }),
   remove: (name: string) => invoke<void>("remove_wakeword", { name }),
   reload: () => invoke<void>("reload"),
+  modelsDir: () => invoke<string>("models_dir"),
 };
 
 export async function onDetected(
@@ -95,6 +99,8 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
         running: true,
         audio_fps: jitter(mockState.audioFps),
         score_fps: jitter(mockState.scoreFps),
+        // simulate breathing input level for the meter preview
+        mic_level: 0.04 + Math.abs(Math.sin(Date.now() / 700)) * 0.2,
       } as T;
     case "list_wakewords":
       return mockState.wakes.map((w) => ({ ...w })) as unknown as T;
@@ -132,6 +138,23 @@ async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
       return undefined as T;
     case "reload":
       return undefined as T;
+    case "models_dir":
+      return "/home/you/.local/share/horchd/models" as T;
+    case "import_wakeword": {
+      const name = args?.name as string;
+      if (mockState.wakes.some((w) => w.name === name)) {
+        throw new Error(`wakeword "${name}" already exists`);
+      }
+      const dest = `/home/you/.local/share/horchd/models/${name}.onnx`;
+      mockState.wakes.push({
+        name,
+        model: dest,
+        threshold: args?.threshold as number,
+        cooldown_ms: args?.cooldownMs as number,
+        enabled: true,
+      });
+      return dest as T;
+    }
     default:
       console.warn("[mock] unknown command", cmd, args);
       return undefined as T;

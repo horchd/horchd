@@ -12,7 +12,7 @@
 //! frame is dropped and counted, never blocked.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
@@ -34,6 +34,9 @@ pub struct AudioStats {
     started_at: Instant,
     frames_emitted: AtomicU64,
     frames_dropped: AtomicU64,
+    /// Most recent cpal callback's peak |sample|, stored as `f32::to_bits`
+    /// in an `AtomicU32` (no atomic floats in std). Range `[0, 1]`.
+    last_peak_bits: AtomicU32,
 }
 
 impl AudioStats {
@@ -42,6 +45,7 @@ impl AudioStats {
             started_at: Instant::now(),
             frames_emitted: AtomicU64::new(0),
             frames_dropped: AtomicU64::new(0),
+            last_peak_bits: AtomicU32::new(0),
         }
     }
 
@@ -64,12 +68,21 @@ impl AudioStats {
         self.frames_dropped.load(Ordering::Relaxed)
     }
 
+    /// Peak `|sample|` of the most recent cpal callback, in `[0, 1]`.
+    pub fn last_peak(&self) -> f32 {
+        f32::from_bits(self.last_peak_bits.load(Ordering::Relaxed))
+    }
+
     fn record_frame(&self) {
         self.frames_emitted.fetch_add(1, Ordering::Relaxed);
     }
 
     fn record_drop(&self) {
         self.frames_dropped.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_peak(&self, peak: f32) {
+        self.last_peak_bits.store(peak.to_bits(), Ordering::Relaxed);
     }
 }
 
@@ -294,10 +307,25 @@ impl CallbackState {
     {
         let chans = self.in_channels;
         let inv = 1.0 / chans as f32;
+        let mut peak = 0.0_f32;
         for chunk in data.chunks_exact(chans) {
             let sum: f32 = chunk.iter().map(|s| f32::from_sample(*s)).sum();
-            self.feed(sum * inv, tx, stats);
+            let mono = sum * inv;
+            let abs = mono.abs();
+            if abs > peak {
+                peak = abs;
+            }
+            self.feed(mono, tx, stats);
         }
+        // EMA-smooth the published peak so the GUI meter doesn't flicker:
+        // attack fast, decay slow.
+        let prev = stats.last_peak();
+        let blended = if peak >= prev {
+            peak
+        } else {
+            prev * 0.78 + peak * 0.22
+        };
+        stats.record_peak(blended.min(1.0));
     }
 
     fn feed(&mut self, sample: f32, tx: &mpsc::Sender<Frame>, stats: &AudioStats) {

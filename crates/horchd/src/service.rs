@@ -71,12 +71,14 @@ impl Daemon {
             .collect()
     }
 
-    /// `(running, audio_fps, score_fps)`.
-    async fn get_status(&self) -> (bool, f64, f64) {
+    /// `(running, audio_fps, score_fps, mic_level)`. `mic_level` is the
+    /// smoothed peak |sample| of the most recent cpal callback, in `[0, 1]`.
+    async fn get_status(&self) -> (bool, f64, f64, f64) {
         (
             true,
             self.audio_stats.audio_fps(),
             self.inference_stats.score_fps(),
+            f64::from(self.audio_stats.last_peak()),
         )
     }
 

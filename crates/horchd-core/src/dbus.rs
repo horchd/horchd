@@ -44,8 +44,11 @@ pub trait Daemon {
     /// path-changed entries trigger I/O. The audio thread is preserved.
     fn reload(&self) -> zbus::Result<()>;
 
-    /// `(running, audio_fps, score_fps)`.
-    fn get_status(&self) -> zbus::Result<(bool, f64, f64)>;
+    /// `(running, audio_fps, score_fps, mic_level)`.
+    /// `mic_level` is the smoothed peak `|sample|` of the most recent
+    /// cpal callback in `[0, 1]` — useful as a "is the mic alive?"
+    /// indicator and as a live input-level meter.
+    fn get_status(&self) -> zbus::Result<(bool, f64, f64, f64)>;
 
     /// Emitted on the rising edge when a wakeword's score crosses its
     /// threshold for the first time within a cooldown window.

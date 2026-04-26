@@ -2,6 +2,8 @@ export interface DaemonStatus {
   running: boolean;
   audio_fps: number;
   score_fps: number;
+  /** Smoothed peak |sample| of the most recent cpal callback, in [0, 1]. */
+  mic_level: number;
 }
 
 export interface WakewordRow {

@@ -40,6 +40,8 @@ pub fn run() {
             commands::add_wakeword,
             commands::remove_wakeword,
             commands::reload,
+            commands::import_wakeword,
+            commands::models_dir,
         ])
         .run(tauri::generate_context!())
         .expect("running horchd-gui");

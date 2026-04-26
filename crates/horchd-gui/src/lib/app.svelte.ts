@@ -4,7 +4,12 @@ import type { DaemonStatus, FireRecord, WakewordRow } from "./types";
 const HISTORY_LEN = 48;
 
 class HorchdState {
-  status = $state<DaemonStatus>({ running: false, audio_fps: 0, score_fps: 0 });
+  status = $state<DaemonStatus>({
+    running: false,
+    audio_fps: 0,
+    score_fps: 0,
+    mic_level: 0,
+  });
   reachable = $state(true);
   wakes = $state<WakewordRow[]>([]);
   audioHistory = $state<number[]>([]);
@@ -73,6 +78,27 @@ class HorchdState {
     } catch (e) {
       this.showToast(`toggle failed: ${formatErr(e)}`, true);
     }
+  }
+
+  async setEnabledPersistent(name: string, enabled: boolean) {
+    try {
+      await dbus.setEnabled(name, enabled, true);
+      await this.refreshWakes();
+    } catch (e) {
+      this.showToast(`toggle failed: ${formatErr(e)}`, true);
+    }
+  }
+
+  async importWakeword(
+    name: string,
+    sourcePath: string,
+    threshold: number,
+    cooldownMs: number,
+  ) {
+    const dest = await dbus.import(name, sourcePath, threshold, cooldownMs);
+    this.showToast(`imported ${name}`);
+    await this.refreshWakes();
+    return dest;
   }
 
   async setThreshold(name: string, value: number, save: boolean) {

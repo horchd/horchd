@@ -317,7 +317,8 @@ fn purge_model(model_path: &str) -> Result<()> {
 }
 
 async fn status(proxy: &DaemonProxy<'_>) -> Result<()> {
-    let (running, audio_fps, score_fps) = proxy.get_status().await.context("calling GetStatus")?;
+    let (running, audio_fps, score_fps, mic_level) =
+        proxy.get_status().await.context("calling GetStatus")?;
     let wakes = proxy
         .list_wakewords()
         .await
@@ -327,6 +328,7 @@ async fn status(proxy: &DaemonProxy<'_>) -> Result<()> {
     println!("daemon:    {state}");
     println!("audio:     {audio_fps:>6.2} fps");
     println!("score:     {score_fps:>6.2} fps");
+    println!("mic level: {mic_level:>6.3}");
     println!("wakewords: {} loaded", wakes.len());
     for (name, threshold, _model, enabled, cooldown_ms) in &wakes {
         let on = if *enabled { "on " } else { "off" };
