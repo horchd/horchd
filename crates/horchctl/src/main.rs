@@ -53,6 +53,32 @@ enum Command {
 
     /// Re-read the config file and reconcile in-memory state.
     Reload,
+
+    /// Download an upstream openWakeWord pretrained model into
+    /// `~/.local/share/horchd/models/` and register it with the daemon.
+    /// Use `--list` to see what's available.
+    ImportPretrained(PretrainedArgs),
+}
+
+#[derive(Debug, Args)]
+struct PretrainedArgs {
+    /// Pretrained model name (e.g. `hey_jarvis_v0.1`). Omit when using `--list`.
+    name: Option<String>,
+    /// Print the catalogue of known pretrained models and exit.
+    #[arg(long)]
+    list: bool,
+    /// Register the wakeword under a different name than the model file.
+    #[arg(long = "as", value_name = "ALIAS")]
+    register_as: Option<String>,
+    /// Initial threshold.
+    #[arg(long, default_value_t = 0.5)]
+    threshold: f64,
+    /// Initial cooldown in milliseconds.
+    #[arg(long, default_value_t = 1500)]
+    cooldown: u32,
+    /// Re-download even if the file already exists locally.
+    #[arg(long)]
+    force: bool,
 }
 
 #[derive(Debug, Args)]
@@ -176,7 +202,101 @@ async fn main() -> Result<()> {
             println!("reloaded");
             Ok(())
         }
+        Command::ImportPretrained(args) => import_pretrained(&proxy, args).await,
     }
+}
+
+const PRETRAINED_BASE: &str =
+    "https://raw.githubusercontent.com/dscripka/openWakeWord/main/openwakeword/resources/models";
+
+const PRETRAINED_CATALOGUE: &[(&str, &str)] = &[
+    ("alexa_v0.1", "Alexa"),
+    ("hey_jarvis_v0.1", "Hey Jarvis"),
+    ("hey_mycroft_v0.1", "Hey Mycroft"),
+    ("hey_rhasspy_v0.1", "Hey Rhasspy"),
+    ("timer_v0.1", "Timer / set a timer"),
+    ("weather_v0.1", "Weather"),
+];
+
+async fn import_pretrained(proxy: &DaemonProxy<'_>, args: PretrainedArgs) -> Result<()> {
+    if args.list {
+        println!("Upstream openWakeWord pretrained models");
+        println!("---------------------------------------");
+        let name_w = PRETRAINED_CATALOGUE
+            .iter()
+            .map(|(n, _)| n.len())
+            .max()
+            .unwrap_or(20);
+        for (name, descr) in PRETRAINED_CATALOGUE {
+            println!("  {name:<name_w$}  {descr}");
+        }
+        println!("\nUsage:  horchctl import-pretrained <name> [--as alias] [--threshold 0.5]");
+        return Ok(());
+    }
+
+    let name = args.name.ok_or_else(|| {
+        anyhow::anyhow!("missing model name; try `horchctl import-pretrained --list`")
+    })?;
+    if !PRETRAINED_CATALOGUE.iter().any(|(n, _)| *n == name) {
+        bail!("{name:?} is not in the pretrained catalogue; run `--list` to see options");
+    }
+
+    let dest_dir = models_dir()?;
+    std::fs::create_dir_all(&dest_dir)
+        .with_context(|| format!("creating {}", dest_dir.display()))?;
+    let dest = dest_dir.join(format!("{name}.onnx"));
+
+    if dest.exists() && !args.force {
+        eprintln!(
+            "note: {} already exists (use --force to re-download)",
+            dest.display()
+        );
+    } else {
+        download(&format!("{PRETRAINED_BASE}/{name}.onnx"), &dest)?;
+        println!("downloaded → {}", dest.display());
+    }
+
+    let register_as = args.register_as.unwrap_or_else(|| name.clone());
+    let model_str = dest.to_string_lossy().into_owned();
+    proxy
+        .add(&register_as, &model_str, args.threshold, args.cooldown)
+        .await
+        .with_context(|| format!("Add({register_as:?}, {model_str:?})"))?;
+    println!("registered wakeword {register_as:?} (model {name})");
+    Ok(())
+}
+
+fn models_dir() -> Result<PathBuf> {
+    let base = std::env::var_os("XDG_DATA_HOME").map_or_else(
+        || {
+            let home =
+                std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("$HOME is not set"))?;
+            Ok::<PathBuf, anyhow::Error>(PathBuf::from(home).join(".local").join("share"))
+        },
+        |v| Ok(PathBuf::from(v)),
+    )?;
+    Ok(base.join("horchd").join("models"))
+}
+
+fn download(url: &str, dest: &std::path::Path) -> Result<()> {
+    use std::process::Command;
+    let status = Command::new("curl")
+        .args([
+            "-fL", // fail on HTTP error, follow redirects
+            "--retry",
+            "3",
+            "--connect-timeout",
+            "10",
+            "-o",
+        ])
+        .arg(dest)
+        .arg(url)
+        .status()
+        .with_context(|| "spawning curl (is curl installed?)")?;
+    if !status.success() {
+        bail!("curl exited with {status} fetching {url}");
+    }
+    Ok(())
 }
 
 fn purge_model(model_path: &str) -> Result<()> {

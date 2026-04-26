@@ -172,6 +172,10 @@ horchctl remove wetter            # keeps the .onnx on disk
 horchctl remove wetter --purge    # also deletes the .onnx + .onnx.data sibling
 
 horchctl reload                   # re-read config.toml; hot-keep unchanged models
+
+horchctl import-pretrained --list                  # catalogue of upstream openWakeWord models
+horchctl import-pretrained hey_jarvis_v0.1         # download + register in one shot
+horchctl import-pretrained hey_jarvis_v0.1 --as jarvis --threshold 0.65
 ```
 
 All mutator commands either error out cleanly (validates shape /
@@ -311,13 +315,12 @@ GitHub Release.
 - [x] openWakeWord pipeline (this release)
 - [x] D-Bus mutation methods + comment-preserving TOML persist
 - [x] horchd-gui Tauri tray + control panel
+- [x] `horchctl import-pretrained <name>` — one-shot fetch of upstream openWakeWord models
 - [ ] [micro-wake-word](https://github.com/OHF-Voice/micro-wake-word)
       backend behind an `engine = "openwakeword" | "microwakeword"`
       config field — same audio capture, different inference stack
       (TFLite micro models, different feature frontend)
 - [ ] AUR submission
-- [ ] `horchctl import-pretrained <name>` — one-shot fetch of an
-      upstream openWakeWord model into the user models dir
 - [ ] Optional `ScoreSnapshot(name, score)` D-Bus signal at low rate
       so subscribers can render live meters without polling
 - [ ] Custom domain at <https://horchd.xyz>
