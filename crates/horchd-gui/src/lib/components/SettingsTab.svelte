@@ -106,11 +106,14 @@
       <span class="muted help">drops the cpal stream and restarts the inference task</span>
     </header>
     <div class="device-row">
-      <select class="select" bind:value={selectedDevice} disabled={switching}>
-        {#each devices as dev (dev)}
-          <option value={dev}>{dev === "default" ? "(host default)" : dev}</option>
-        {/each}
-      </select>
+      <div class="select-wrap" class:disabled={switching}>
+        <select class="select" bind:value={selectedDevice} disabled={switching}>
+          {#each devices as dev (dev)}
+            <option value={dev}>{dev === "default" ? "(host default)" : dev}</option>
+          {/each}
+        </select>
+        <span class="chevron" aria-hidden="true">▾</span>
+      </div>
       <label class="persist-toggle">
         <input type="checkbox" bind:checked={savePersist} />
         <span>persist to <code>config.toml</code></span>
@@ -255,17 +258,62 @@
     align-items: center;
     padding: 6px 0 12px;
   }
+  .select-wrap {
+    position: relative;
+    min-width: 0;
+  }
   .select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 100%;
     font-family: var(--font-mono);
     font-size: 12px;
-    padding: 6px 10px;
+    font-weight: 500;
+    padding: 8px 32px 8px 12px;
     background: var(--color-paper-2);
-    border: 1px solid var(--color-rule-soft);
+    border: 1px solid var(--color-rule);
     color: var(--color-ink);
+    cursor: pointer;
+    transition:
+      background 0.18s ease,
+      border-color 0.18s ease,
+      color 0.18s ease;
+    /* Long device names shouldn't break the row layout. */
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .select:hover {
+    border-color: var(--color-ink);
+    background: color-mix(in oklab, var(--color-paper-2) 70%, var(--color-paper-3));
   }
   .select:focus {
     outline: 2px solid var(--color-accent);
-    outline-offset: -1px;
+    outline-offset: -2px;
+  }
+  .select-wrap.disabled .select,
+  .select:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+  .chevron {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-52%);
+    pointer-events: none;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--color-muted);
+    font-family: var(--font-mono);
+  }
+  .select-wrap:hover .chevron { color: var(--color-ink); }
+  /* Browser dropdown popup (limited but worth doing). */
+  .select option {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
   }
   .persist-toggle {
     display: inline-flex;
