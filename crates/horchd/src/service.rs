@@ -11,16 +11,20 @@ use horchd_core::{Config, WakewordSnapshot};
 use tokio::sync::RwLock;
 use zbus::interface;
 
+use crate::audio::AudioStats;
+
 pub struct Daemon {
     config: Arc<RwLock<Config>>,
+    audio_stats: Arc<AudioStats>,
     #[allow(dead_code)] // used by Reload / persist flows in later phases
     config_path: PathBuf,
 }
 
 impl Daemon {
-    pub fn new(config: Config, config_path: PathBuf) -> Self {
+    pub fn new(config: Config, config_path: PathBuf, audio_stats: Arc<AudioStats>) -> Self {
         Self {
             config: Arc::new(RwLock::new(config)),
+            audio_stats,
             config_path,
         }
     }
@@ -46,9 +50,9 @@ impl Daemon {
             .collect()
     }
 
-    /// `(running, audio_fps, score_fps)`. Audio + inference land in
-    /// later phases; the fps fields are zero until then.
+    /// `(running, audio_fps, score_fps)`. Score-fps stays at zero until
+    /// the inference pipeline lands in Phase 4.
     async fn get_status(&self) -> (bool, f64, f64) {
-        (true, 0.0, 0.0)
+        (true, self.audio_stats.audio_fps(), 0.0)
     }
 }
