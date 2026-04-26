@@ -719,6 +719,13 @@ dependencies = [
 [[package]]
 name = "horchd-core"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "shellexpand",
+ "thiserror 2.0.18",
+ "toml",
+ "zbus",
+]
 
 [[package]]
 name = "http"
