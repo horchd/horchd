@@ -233,9 +233,10 @@ Interface:  xyz.horchd.Daemon1
 | `SetCooldown`   | `s name`, `u ms`, `b persist`                       | `()`           |
 | `Reload`        | —                                                   | `()`           |
 
-| Signal     | Args                                  |
-| ---------- | ------------------------------------- |
-| `Detected` | `s name`, `d score`, `t timestamp_us` |
+| Signal          | Args                                  | Notes |
+| --------------- | ------------------------------------- | ----- |
+| `Detected`      | `s name`, `d score`, `t timestamp_us` | Rising-edge fire after threshold + cooldown. |
+| `ScoreSnapshot` | `s name`, `d score`                   | ~5 Hz per-wakeword score; for live UI meters. |
 
 Full reference + introspection output: <https://horchd.github.io/dbus-api>.
 
@@ -316,12 +317,12 @@ GitHub Release.
 - [x] D-Bus mutation methods + comment-preserving TOML persist
 - [x] horchd-gui Tauri tray + control panel
 - [x] `horchctl import-pretrained <name>` — one-shot fetch of upstream openWakeWord models
+- [x] `ScoreSnapshot(name, score)` D-Bus signal at ~5 Hz so subscribers can render live meters without polling
 - [ ] [micro-wake-word](https://github.com/OHF-Voice/micro-wake-word)
       backend behind an `engine = "openwakeword" | "microwakeword"`
       config field — same audio capture, different inference stack
       (TFLite micro models, different feature frontend)
 - [ ] AUR submission
-- [ ] Optional `ScoreSnapshot(name, score)` D-Bus signal at low rate
       so subscribers can render live meters without polling
 - [ ] Custom domain at <https://horchd.xyz>
 

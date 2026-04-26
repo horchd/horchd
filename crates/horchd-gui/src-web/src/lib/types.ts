@@ -19,6 +19,11 @@ export interface DetectedPayload {
   received_unix_ms: number;
 }
 
+export interface ScorePayload {
+  name: string;
+  score: number;
+}
+
 export interface FireRecord {
   name: string;
   score: number;

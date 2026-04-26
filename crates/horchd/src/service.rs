@@ -228,6 +228,14 @@ impl Daemon {
         score: f64,
         timestamp_us: u64,
     ) -> zbus::Result<()>;
+
+    /// Low-rate per-wakeword score snapshot (~5 Hz) for live UI meters.
+    #[zbus(signal)]
+    pub async fn score_snapshot(
+        emitter: &SignalEmitter<'_>,
+        name: &str,
+        score: f64,
+    ) -> zbus::Result<()>;
 }
 
 fn reconcile(state: &mut crate::state::DaemonState, new: Config) -> anyhow::Result<()> {

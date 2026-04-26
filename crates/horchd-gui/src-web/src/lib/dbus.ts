@@ -6,7 +6,7 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
 
-import type { DaemonStatus, DetectedPayload, WakewordRow } from "./types";
+import type { DaemonStatus, DetectedPayload, ScorePayload, WakewordRow } from "./types";
 
 const inTauri =
   typeof window !== "undefined" &&
@@ -51,6 +51,26 @@ export async function onDetected(
       received_unix_ms: Date.now(),
     });
   }, 7000);
+  return async () => window.clearInterval(id);
+}
+
+export async function onScore(
+  cb: (payload: ScorePayload) => void,
+): Promise<UnlistenFn> {
+  if (inTauri) {
+    return tauriListen<ScorePayload>("horchd://score", (e) => cb(e.payload));
+  }
+  // Out-of-Tauri: drift each wake's score with smooth pink-noise so the
+  // meter exercises both below- and above-threshold states.
+  const drift: Record<string, number> = {};
+  const id = window.setInterval(() => {
+    for (const w of mockState.wakes) {
+      const prev = drift[w.name] ?? Math.random() * 0.5;
+      const next = Math.max(0, Math.min(1, prev + (Math.random() - 0.5) * 0.15));
+      drift[w.name] = next;
+      cb({ name: w.name, score: next });
+    }
+  }, 200);
   return async () => window.clearInterval(id);
 }
 

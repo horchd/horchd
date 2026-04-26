@@ -52,4 +52,10 @@ pub trait Daemon {
     /// `timestamp_us` is `CLOCK_MONOTONIC` microseconds since boot.
     #[zbus(signal)]
     fn detected(&self, name: &str, score: f64, timestamp_us: u64) -> zbus::Result<()>;
+
+    /// Low-rate (~5 Hz) per-wakeword score snapshot for live UI meters.
+    /// Subscribers can render a continuous score trace without polling
+    /// `ListWakewords`. Always-on; subscribe-time decides cost.
+    #[zbus(signal)]
+    fn score_snapshot(&self, name: &str, score: f64) -> zbus::Result<()>;
 }

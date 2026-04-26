@@ -33,6 +33,12 @@
     return f ? elapsed(f.ts_ms) : "never";
   })(app.tick));
 
+  // Live score from `xyz.horchd.Daemon1.ScoreSnapshot`. `undefined` until
+  // the first snapshot arrives (the first ~200 ms of daemon uptime).
+  const live = $derived(app.liveScores[wake.name]);
+  const meterPct = $derived(Math.max(0, Math.min(1, live ?? 0)) * 100);
+  const over = $derived(live !== undefined && live >= local);
+
   async function onInput(ev: Event) {
     const v = parseFloat((ev.target as HTMLInputElement).value);
     pending = v;
@@ -86,17 +92,28 @@
     <div class="flex-1">
       <div class="flex justify-between items-baseline label-tracked text-(--color-muted) mb-1">
         <span>Threshold</span>
-        <span class="val">{local.toFixed(3)}</span>
+        <span class="meter-readout">
+          <span class="live" class:over>{live !== undefined ? live.toFixed(3) : "—"}</span>
+          <span class="sep">/</span>
+          <span class="val">{local.toFixed(3)}</span>
+        </span>
       </div>
-      <input
-        class="slider"
-        type="range"
-        min="0"
-        max="1"
-        step="0.01"
-        value={local}
-        oninput={onInput}
-      />
+      <div class="meter-wrap">
+        <div
+          class="meter-fill"
+          class:over
+          style:width="{meterPct}%"
+        ></div>
+        <input
+          class="slider"
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={local}
+          oninput={onInput}
+        />
+      </div>
     </div>
     <button
       class="save-btn label-tracked px-1.5 py-0.5 cursor-pointer transition"
@@ -177,6 +194,58 @@
     letter-spacing: -0.01em;
     font-size: 16px;
     color: var(--color-ink);
+  }
+
+  .meter-readout {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .meter-readout .live {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-muted);
+    transition: color 0.18s ease;
+    min-width: 3ch;
+    text-align: right;
+  }
+  .meter-readout .live.over {
+    color: var(--color-accent);
+    font-weight: 600;
+  }
+  .meter-readout .sep {
+    color: var(--color-rule-soft);
+    font-size: 11px;
+  }
+
+  .meter-wrap {
+    position: relative;
+    height: 18px;
+  }
+  .meter-fill {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    margin-top: -3px;
+    height: 6px;
+    background: var(--color-ink-soft);
+    transition:
+      width 0.18s ease,
+      background 0.25s ease,
+      opacity 0.25s ease;
+    pointer-events: none;
+    opacity: 0.42;
+    z-index: 0;
+  }
+  .meter-fill.over {
+    background: var(--color-accent);
+    opacity: 1;
+  }
+  .meter-wrap .slider {
+    position: relative;
+    z-index: 1;
   }
 
   .toggle:hover {

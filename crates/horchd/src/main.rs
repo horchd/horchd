@@ -27,6 +27,16 @@ const AUDIO_CHANNEL_CAPACITY: usize = 16;
 /// Broadcast capacity for `Detected` events.
 const EVENT_BROADCAST_CAPACITY: usize = 64;
 
+/// Broadcast capacity for the higher-rate `ScoreSnapshot` channel.
+/// At ~5 Hz × N wakewords, 256 leaves dozens of seconds of headroom for
+/// any slow subscriber.
+const SCORE_BROADCAST_CAPACITY: usize = 256;
+
+/// Minimum wall-clock gap between consecutive `ScoreSnapshot` emissions
+/// per wakeword. Inference fires ~12.5 Hz; throttling to 5 Hz keeps the
+/// bus quiet while still feeling live to a UI meter.
+const SCORE_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(200);
+
 /// Stats log cadence.
 const STATS_LOG_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -105,11 +115,13 @@ async fn main() -> Result<()> {
     let inference_stats = Arc::new(inference::InferenceStats::new());
 
     let (event_tx, _) = broadcast::channel::<WakewordEvent>(EVENT_BROADCAST_CAPACITY);
+    let (score_tx, _) = broadcast::channel::<(String, f64)>(SCORE_BROADCAST_CAPACITY);
 
     tokio::spawn(run_inference(
         frames,
         Arc::clone(&shared_state),
         event_tx.clone(),
+        score_tx.clone(),
         Arc::clone(&inference_stats),
     ));
     tokio::spawn(log_stats(
@@ -136,6 +148,7 @@ async fn main() -> Result<()> {
     );
 
     tokio::spawn(emit_signals(conn.clone(), event_tx.subscribe()));
+    tokio::spawn(emit_score_snapshots(conn.clone(), score_tx.subscribe()));
 
     shutdown_signal().await;
     drop(audio_handle); // explicit: stops the cpal stream
@@ -147,8 +160,10 @@ async fn run_inference(
     mut frames: tokio::sync::mpsc::Receiver<audio::Frame>,
     shared: state::SharedState,
     events: broadcast::Sender<WakewordEvent>,
+    scores_tx: broadcast::Sender<(String, f64)>,
     stats: Arc<inference::InferenceStats>,
 ) {
+    let mut last_snapshot: Option<Instant> = None;
     while let Some(frame) = frames.recv().await {
         let mut s = shared.lock().await;
         let result = tokio::task::block_in_place(|| s.pipeline.process(&frame));
@@ -162,9 +177,17 @@ async fn run_inference(
         stats.record_score();
 
         let now = Instant::now();
+        let snapshot_due = last_snapshot
+            .map(|t| now.duration_since(t) >= SCORE_SNAPSHOT_INTERVAL)
+            .unwrap_or(true);
+
         for (det, (name, score)) in s.detectors.iter_mut().zip(scores.iter()) {
             debug_assert_eq!(name, &det.name, "detector/classifier order mismatch");
-            let Some(event) = det.update(f64::from(*score), now) else {
+            let score_f64 = f64::from(*score);
+            if snapshot_due {
+                let _ = scores_tx.send((name.clone(), score_f64));
+            }
+            let Some(event) = det.update(score_f64, now) else {
                 continue;
             };
             tracing::info!(
@@ -174,6 +197,9 @@ async fn run_inference(
                 "wakeword detected"
             );
             let _ = events.send(event);
+        }
+        if snapshot_due {
+            last_snapshot = Some(now);
         }
     }
     tracing::warn!("audio frame channel closed");
@@ -207,6 +233,35 @@ async fn emit_one(conn: &Connection, event: &WakewordEvent) {
         service::Daemon::detected(&emitter, &event.name, event.score, event.timestamp_us).await
     {
         tracing::error!(?err, name = %event.name, "emitting Detected signal");
+    }
+}
+
+async fn emit_score_snapshots(conn: Connection, mut scores: broadcast::Receiver<(String, f64)>) {
+    use tokio::sync::broadcast::error::RecvError;
+    loop {
+        match scores.recv().await {
+            Ok((name, score)) => emit_score(&conn, &name, score).await,
+            Err(RecvError::Lagged(n)) => {
+                tracing::debug!(skipped = n, "score snapshot emitter lagged");
+            }
+            Err(RecvError::Closed) => {
+                tracing::info!("score broadcast closed; snapshot emitter exiting");
+                break;
+            }
+        }
+    }
+}
+
+async fn emit_score(conn: &Connection, name: &str, score: f64) {
+    let emitter = match SignalEmitter::new(conn, DBUS_PATH) {
+        Ok(e) => e,
+        Err(err) => {
+            tracing::error!(?err, "creating SignalEmitter");
+            return;
+        }
+    };
+    if let Err(err) = service::Daemon::score_snapshot(&emitter, name, score).await {
+        tracing::warn!(?err, name, "emitting ScoreSnapshot signal");
     }
 }
 

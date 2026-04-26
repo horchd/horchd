@@ -1,4 +1,4 @@
-import { dbus, onDetected } from "./dbus";
+import { dbus, onDetected, onScore } from "./dbus";
 import type { DaemonStatus, FireRecord, WakewordRow } from "./types";
 
 const HISTORY_LEN = 48;
@@ -11,6 +11,8 @@ class HorchdState {
   scoreHistory = $state<number[]>([]);
   /** name → most recent fire */
   lastFires = $state<Record<string, FireRecord>>({});
+  /** name → live score (updated ~5 Hz from `horchd://score`) */
+  liveScores = $state<Record<string, number>>({});
   /** newest fire first, capped */
   recentFires = $state<FireRecord[]>([]);
   /** UI tick counter so derived "x seconds ago" labels re-render */
@@ -22,7 +24,8 @@ class HorchdState {
   private statusTimer?: ReturnType<typeof setInterval>;
   private wakesTimer?: ReturnType<typeof setInterval>;
   private tickTimer?: ReturnType<typeof setInterval>;
-  private unlisten?: () => void | Promise<void>;
+  private unlistenDetected?: () => void | Promise<void>;
+  private unlistenScore?: () => void | Promise<void>;
 
   showToast(msg: string, isError = false) {
     this.toastN += 1;
@@ -107,22 +110,28 @@ class HorchdState {
     this.recentFires = [rec, ...this.recentFires].slice(0, 8);
   }
 
+  recordScore(name: string, score: number) {
+    this.liveScores = { ...this.liveScores, [name]: score };
+  }
+
   async start() {
     await this.pollStatus();
     await this.refreshWakes();
     this.statusTimer = setInterval(() => void this.pollStatus(), 1000);
     this.wakesTimer = setInterval(() => void this.refreshWakes(), 5000);
     this.tickTimer = setInterval(() => (this.tick += 1), 1000);
-    this.unlisten = await onDetected((p) =>
+    this.unlistenDetected = await onDetected((p) =>
       this.recordFire(p.name, p.score, p.received_unix_ms ?? Date.now()),
     );
+    this.unlistenScore = await onScore((p) => this.recordScore(p.name, p.score));
   }
 
   stop() {
     if (this.statusTimer) clearInterval(this.statusTimer);
     if (this.wakesTimer) clearInterval(this.wakesTimer);
     if (this.tickTimer) clearInterval(this.tickTimer);
-    void this.unlisten?.();
+    void this.unlistenDetected?.();
+    void this.unlistenScore?.();
   }
 }
 
