@@ -704,6 +704,7 @@ dependencies = [
  "anyhow",
  "clap",
  "cpal",
+ "horchd-core",
  "ndarray",
  "ort",
  "serde",
