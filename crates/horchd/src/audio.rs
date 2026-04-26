@@ -204,13 +204,30 @@ fn select_input_config(device: &cpal::Device) -> Result<(SupportedStreamConfig, 
     )
 }
 
+/// Lower = better. Wide-precision floats first, then ints, then 8-bit.
+/// 8-bit captures sound terrible (≤ 256 levels per sample = visibly
+/// quiet meter and audibly grainy preprocessor input).
+fn sample_format_pref(fmt: SampleFormat) -> u8 {
+    match fmt {
+        SampleFormat::F32 | SampleFormat::F64 => 0,
+        SampleFormat::I32 | SampleFormat::U32 => 1,
+        SampleFormat::I16 | SampleFormat::U16 => 2,
+        SampleFormat::I8 | SampleFormat::U8 => 3,
+        _ => 4,
+    }
+}
+
 fn pick_exact_target(ranges: &[SupportedStreamConfigRange]) -> Option<SupportedStreamConfig> {
     ranges
         .iter()
         .filter(|r| {
             r.min_sample_rate() <= TARGET_SAMPLE_RATE && TARGET_SAMPLE_RATE <= r.max_sample_rate()
         })
-        .min_by_key(|r| r.channels())
+        .min_by(|a, b| {
+            sample_format_pref(a.sample_format())
+                .cmp(&sample_format_pref(b.sample_format()))
+                .then_with(|| a.channels().cmp(&b.channels()))
+        })
         .map(|r| r.with_sample_rate(TARGET_SAMPLE_RATE))
 }
 
@@ -224,8 +241,9 @@ fn pick_integer_multiple(
             m >= TARGET_SAMPLE_RATE && m.is_multiple_of(TARGET_SAMPLE_RATE)
         })
         .min_by(|a, b| {
-            a.max_sample_rate()
-                .cmp(&b.max_sample_rate())
+            sample_format_pref(a.sample_format())
+                .cmp(&sample_format_pref(b.sample_format()))
+                .then_with(|| a.max_sample_rate().cmp(&b.max_sample_rate()))
                 .then_with(|| a.channels().cmp(&b.channels()))
         })
         .map(|r| {

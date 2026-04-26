@@ -153,7 +153,8 @@ class HorchdState {
   async start() {
     await this.pollStatus();
     await this.refreshWakes();
-    this.statusTimer = setInterval(() => void this.pollStatus(), 1000);
+    // 5 Hz so the mic meter feels live (matches ScoreSnapshot rate).
+    this.statusTimer = setInterval(() => void this.pollStatus(), 200);
     this.wakesTimer = setInterval(() => void this.refreshWakes(), 5000);
     this.tickTimer = setInterval(() => (this.tick += 1), 1000);
     this.unlistenDetected = await onDetected((p) =>
