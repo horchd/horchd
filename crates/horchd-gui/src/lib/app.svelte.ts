@@ -44,11 +44,21 @@ class HorchdState {
       this.audioHistory = pushCap(this.audioHistory, s.audio_fps);
       this.scoreHistory = pushCap(this.scoreHistory, s.score_fps);
     } catch {
+      // First time we notice the daemon is gone — clear stale wake list
+      // so the UI flips to the disconnected empty state instead of
+      // showing a now-meaningless snapshot.
+      if (this.reachable) {
+        this.wakes = [];
+        this.liveScores = {};
+      }
       this.reachable = false;
     }
   }
 
   async refreshWakes() {
+    // Skip when we already know the daemon is gone — the status pill
+    // carries that signal; piling per-call toasts on top is noise.
+    if (!this.reachable) return;
     try {
       this.wakes = await dbus.list();
     } catch (e) {
