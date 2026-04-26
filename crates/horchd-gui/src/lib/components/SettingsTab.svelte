@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { Sparkles } from "@lucide/svelte";
+
   import { app } from "$lib/app.svelte";
   import { dbus } from "$lib/dbus";
+  import { openLyna } from "$lib/lyna";
 
   let modelsDir = $state<string>("…");
   let copied = $state<string | undefined>(undefined);
@@ -37,6 +40,22 @@
       setTimeout(() => (copied = undefined), 1400);
     } catch {
       app.showToast("clipboard unavailable", true);
+    }
+  }
+
+  async function trainInLyna() {
+    try {
+      const where = await openLyna();
+      app.showToast(
+        where === "local"
+          ? "opened Lyna at localhost:5173"
+          : "Lyna isn't running locally — opened install instructions",
+      );
+    } catch (e) {
+      app.showToast(
+        `couldn't open Lyna: ${e instanceof Error ? e.message : String(e)}`,
+        true,
+      );
     }
   }
 
@@ -127,6 +146,26 @@
       about. <code>(host default)</code> follows whatever PipeWire / Pulse
       currently routes to.
     </p>
+  </div>
+
+  <div class="group">
+    <header class="group-head">
+      <span class="label-tracked group-label">Train your own wakeword</span>
+    </header>
+    <p class="group-body">
+      horchd is intentionally trainerless — it loads any
+      openWakeWord-compatible <code>.onnx</code> classifier. Use
+      <strong>Lyna</strong>, the companion trainer/studio, to record
+      samples, pick TTS voices for synthetic data, run training, and
+      export a model. Drop the resulting <code>.onnx</code> back into
+      <em>Add → Import</em>.
+    </p>
+    <div class="lyna-row">
+      <button class="action-btn primary" onclick={trainInLyna}>
+        <Sparkles size="13" /> Open Lyna
+      </button>
+      <span class="muted small">probes <code>localhost:5173</code> · falls back to GitHub</span>
+    </div>
   </div>
 
   <div class="group">
@@ -338,4 +377,22 @@
     text-transform: none;
     letter-spacing: 0;
   }
+  .action-btn.primary {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .action-btn.primary:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .lyna-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .small { font-size: 10px; }
 </style>

@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { Sparkles } from "@lucide/svelte";
+
   import { app } from "$lib/app.svelte";
   import { dbus } from "$lib/dbus";
+  import { openLyna } from "$lib/lyna";
 
   type Props = { onClose: () => void };
   let { onClose }: Props = $props();
@@ -68,6 +71,19 @@
   function onKey(ev: KeyboardEvent) {
     if (ev.key === "Escape") onClose();
   }
+
+  async function trainInLyna() {
+    try {
+      const where = await openLyna();
+      app.showToast(
+        where === "local"
+          ? "opened Lyna at localhost:5173"
+          : "Lyna isn't running locally — opened install instructions",
+      );
+    } catch (e) {
+      app.showToast(`couldn't open Lyna: ${e instanceof Error ? e.message : String(e)}`, true);
+    }
+  }
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -80,7 +96,10 @@
       <h3 id="add-modal-title" class="wordmark">Add wakeword.</h3>
       <p class="hint">
         <strong>Import</strong> copies the model into <code>{modelsDir}</code> first;
-        <strong>Register</strong> uses the file in place.
+        <strong>Register</strong> uses the file in place. Need a custom
+        wakeword? <button type="button" class="train-link" onclick={trainInLyna}>
+          <Sparkles size="11" /> train one in Lyna
+        </button>.
       </p>
     </header>
 
@@ -218,6 +237,21 @@
     font-size: 11px;
     background: var(--color-paper-2);
     padding: 1px 5px;
+  }
+  .train-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--color-accent);
+    border-bottom: 1px solid currentColor;
+    cursor: pointer;
+  }
+  .train-link:hover {
+    color: var(--color-ink);
   }
 
   .modes {
