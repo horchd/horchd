@@ -1,0 +1,21 @@
+[Unit]
+Description=horchd — wakeword detection daemon
+Documentation=https://horchd.xyz
+After=pipewire.socket pulseaudio.socket
+Wants=pipewire.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/horchd
+Restart=on-failure
+RestartSec=2
+Environment=RUST_LOG=info
+# Security tightening (works for a per-user PipeWire client):
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/horchd %h/.local/share/horchd
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

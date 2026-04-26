@@ -1,0 +1,72 @@
+# Maintainer: spitzli <tech@luninora.de>
+pkgname=horchd
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Native multi-wakeword detection daemon broadcasting D-Bus signals on the session bus"
+arch=('x86_64' 'aarch64')
+url="https://horchd.xyz"
+license=('MIT' 'Apache-2.0')
+depends=(
+  'pipewire'
+  'gcc-libs'
+  'glibc'
+)
+makedepends=(
+  'cargo'
+  'git'
+)
+optdepends=(
+  'systemd: user unit for auto-start'
+)
+backup=()
+options=('!lto')   # ort downloads precompiled ONNX Runtime binaries; LTO across them is unhelpful
+source=("git+https://github.com/horchd/$pkgname.git#tag=v$pkgver")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$srcdir/$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$srcdir/$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release --bin horchd --bin horchctl
+}
+
+check() {
+  cd "$srcdir/$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --workspace
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+  install -Dm755 target/release/horchd  "$pkgdir/usr/bin/horchd"
+  install -Dm755 target/release/horchctl "$pkgdir/usr/bin/horchctl"
+
+  # systemd user unit
+  install -Dm644 systemd/horchd.service "$pkgdir/usr/lib/systemd/user/horchd.service"
+
+  # Shared ONNX models — only installed if checked into the source. Most
+  # users will pull these from openwakeword's Python package; the README
+  # documents the one-line copy. We don't make this PKGBUILD download
+  # them itself to keep the build hermetic.
+  if [[ -f shared-models/melspectrogram.onnx && -f shared-models/embedding_model.onnx ]]; then
+    install -Dm644 shared-models/melspectrogram.onnx  "$pkgdir/usr/share/horchd/melspectrogram.onnx"
+    install -Dm644 shared-models/embedding_model.onnx "$pkgdir/usr/share/horchd/embedding_model.onnx"
+  fi
+
+  # Example config + subscribers
+  install -Dm644 examples/horchd.toml      "$pkgdir/usr/share/doc/$pkgname/examples/horchd.toml"
+  install -Dm755 examples/subscriber.sh    "$pkgdir/usr/share/doc/$pkgname/examples/subscriber.sh"
+  install -Dm644 examples/subscriber.py    "$pkgdir/usr/share/doc/$pkgname/examples/subscriber.py"
+
+  install -Dm644 README.md       "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 LICENSE-MIT     "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MIT"
+  install -Dm644 LICENSE-APACHE  "$pkgdir/usr/share/licenses/$pkgname/LICENSE-APACHE"
+}
+
+# vim:set ts=2 sw=2 et:

@@ -1,0 +1,47 @@
+# horchd example config.
+#
+# Lives at $XDG_CONFIG_HOME/horchd/config.toml (defaults to
+# ~/.config/horchd/config.toml). Hand-editing is supported and expected;
+# `horchctl reload` re-reads the file without dropping the audio thread.
+# `horchctl threshold/enable/disable/add/remove --save` mutate this file
+# in place while preserving comments and formatting.
+
+[engine]
+# cpal device name; "default" = system default mic.
+device = "default"
+
+# Audio is forced to 16 kHz mono internally. This field is currently a
+# documented sanity check — horchd refuses to start at any other rate.
+sample_rate = 16000
+
+# trace | debug | info | warn | error. Overridable via RUST_LOG env.
+log_level = "info"
+
+[engine.shared_models]
+# Universal preprocessing models bundled by `install.sh`. They come from
+# the upstream openWakeWord package and are not per-wakeword.
+melspectrogram = "/usr/local/share/horchd/melspectrogram.onnx"
+embedding      = "/usr/local/share/horchd/embedding_model.onnx"
+
+# ----------------------------------------------------------------------
+# Wakewords. Each [[wakeword]] block loads one classifier .onnx.
+# Field defaults: threshold = 0.5, cooldown_ms = 1500, enabled = true.
+# `~` and `$VAR` paths are expanded.
+#
+# Example: a Lyna-trained model
+#
+# [[wakeword]]
+# name = "lyna"
+# model = "~/.local/share/horchd/models/lyna.onnx"
+# threshold = 0.5
+# cooldown_ms = 1500
+# enabled = true
+#
+# Example: an upstream openWakeWord pretrained model
+#
+# [[wakeword]]
+# name = "hey_jarvis"
+# model = "~/.local/share/horchd/models/hey_jarvis_v0.1.onnx"
+# threshold = 0.65
+# cooldown_ms = 1500
+# ----------------------------------------------------------------------
