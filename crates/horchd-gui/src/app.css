@@ -52,6 +52,39 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Native-app feel: text is unselectable by default, like a real GUI.
+   Re-enable selection only where it actually helps the user (form
+   inputs, code, anything explicitly opted in via `.selectable`). */
+:root {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+input,
+textarea,
+[contenteditable="true"],
+code,
+pre,
+.selectable {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+button,
+a,
+[role="button"],
+label,
+select,
+summary {
+  cursor: pointer;
+}
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 body {
   background-image:
     radial-gradient(circle at 20% 0%, color-mix(in oklab, var(--color-paper) 92%, var(--color-paper-3)) 0%, transparent 60%),
