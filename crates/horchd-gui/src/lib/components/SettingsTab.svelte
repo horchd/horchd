@@ -52,10 +52,7 @@
           : "Lyna isn't running locally — opened install instructions",
       );
     } catch (e) {
-      app.showToast(
-        `couldn't open Lyna: ${e instanceof Error ? e.message : String(e)}`,
-        true,
-      );
+      app.showToast(`couldn't open Lyna: ${e instanceof Error ? e.message : String(e)}`, true);
     }
   }
 
@@ -75,324 +72,125 @@
   }
 </script>
 
-<section class="settings">
-  <header class="head">
-    <h2 class="label-tracked">Settings</h2>
+<section class="pt-7">
+  <header class="mb-6">
+    <h2 class="label-tracked text-ink font-bold m-0">Settings</h2>
   </header>
 
-  <div class="group">
-    <div class="row">
-      <div class="row-label">
+  <div class="mb-8 pb-6 border-b border-rule-soft">
+    <div class="grid grid-cols-[1fr_auto] items-center gap-4 py-3.5 border-b border-rule-soft">
+      <div class="flex flex-col gap-0.5">
         <span class="label-tracked">Daemon status</span>
-        <span class="row-help">Live readout of the running horchd process</span>
+        <span class="text-[11px] text-muted">Live readout of the running horchd process</span>
       </div>
-      <div class="row-value">
-        <span class="badge" class:ok={app.reachable} class:bad={!app.reachable}>
+      <div class="inline-flex items-center gap-2 font-mono">
+        <span
+          class="px-2 py-0.5 border border-current text-[10px] tracking-[0.18em] uppercase font-semibold"
+          class:text-ok={app.reachable}
+          class:text-accent={!app.reachable}
+        >
           {app.reachable ? (app.status.running ? "running" : "stopped") : "no daemon"}
         </span>
-        <span class="muted">·</span>
-        <span class="muted">audio {app.status.audio_fps.toFixed(2)} fps · score {app.status.score_fps.toFixed(2)} fps</span>
+        <span class="text-muted text-[11px]">·</span>
+        <span class="text-muted text-[11px]">audio {app.status.audio_fps.toFixed(2)} fps · score {app.status.score_fps.toFixed(2)} fps</span>
       </div>
     </div>
 
-    <div class="row">
-      <div class="row-label">
+    <div class="grid grid-cols-[1fr_auto] items-center gap-4 py-3.5 border-b border-rule-soft">
+      <div class="flex flex-col gap-0.5">
         <span class="label-tracked">Models directory</span>
-        <span class="row-help">Where <em>Import</em> + <em>horchctl import-pretrained</em> drop new <code>.onnx</code> files</span>
+        <span class="text-[11px] text-muted">Where <em>Import</em> + <em>horchctl import-pretrained</em> drop new <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">.onnx</code> files</span>
       </div>
-      <div class="row-value">
-        <code class="path">{modelsDir}</code>
-        <button class="copy-btn" onclick={() => copy(modelsDir, "models dir")}>
-          {copied === "models dir" ? "✓" : "copy"}
-        </button>
+      <div class="inline-flex items-center gap-2 font-mono">
+        <code class="text-[12px] text-ink bg-paper-2 px-2 py-1 border border-rule-soft max-w-[360px] overflow-hidden text-ellipsis whitespace-nowrap">{modelsDir}</code>
+        <button
+          class="font-mono font-semibold text-[10px] tracking-[0.2em] uppercase px-2.5 py-1 border border-rule bg-transparent text-ink cursor-pointer transition-colors hover:bg-ink hover:text-paper"
+          onclick={() => copy(modelsDir, "models dir")}
+        >{copied === "models dir" ? "✓" : "copy"}</button>
       </div>
     </div>
 
-    <div class="row">
-      <div class="row-label">
+    <div class="grid grid-cols-[1fr_auto] items-center gap-4 py-3.5">
+      <div class="flex flex-col gap-0.5">
         <span class="label-tracked">Reload config</span>
-        <span class="row-help">Re-read <code>~/.config/horchd/config.toml</code> without dropping the audio thread</span>
+        <span class="text-[11px] text-muted">Re-read <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">~/.config/horchd/config.toml</code> without dropping the audio thread</span>
       </div>
-      <div class="row-value">
-        <button class="action-btn" onclick={() => app.reload()}>Reload</button>
+      <div class="inline-flex items-center gap-2 font-mono">
+        <button
+          class="font-mono font-semibold text-[10px] tracking-[0.2em] uppercase px-2.5 py-1 border border-rule bg-transparent text-ink cursor-pointer transition-colors hover:bg-ink hover:text-paper"
+          onclick={() => app.reload()}
+        >Reload</button>
       </div>
     </div>
   </div>
 
-  <div class="group">
-    <header class="group-head">
-      <span class="label-tracked group-label">Audio input device</span>
-      <span class="muted help">drops the cpal stream and restarts the inference task</span>
+  <div class="mb-8 pb-6 border-b border-rule-soft">
+    <header class="flex items-baseline justify-between mb-2.5">
+      <span class="label-tracked text-ink font-bold">Audio input device</span>
+      <span class="text-muted text-[10px]">drops the cpal stream and restarts the inference task</span>
     </header>
-    <div class="device-row">
-      <div class="select-wrap" class:disabled={switching}>
-        <select class="select" bind:value={selectedDevice} disabled={switching}>
+    <div class="grid grid-cols-[1fr_auto_auto] items-center gap-3 py-1.5 pb-3">
+      <div class="relative min-w-0" class:opacity-50={switching}>
+        <select
+          class="field-select w-full font-mono text-[12px] font-medium px-3 py-2 pr-8 bg-paper-2 border border-rule text-ink cursor-pointer transition-colors text-ellipsis whitespace-nowrap overflow-hidden hover:border-ink hover:bg-[color-mix(in_oklab,var(--color-paper-2)_70%,var(--color-paper-3))] focus:outline-2 focus:outline-accent focus:-outline-offset-2 disabled:opacity-50 disabled:cursor-progress"
+          bind:value={selectedDevice}
+          disabled={switching}
+        >
           {#each devices as dev (dev)}
-            <option value={dev}>{dev === "default" ? "(host default)" : dev}</option>
+            <option value={dev} class="bg-paper text-ink font-mono">
+              {dev === "default" ? "(host default)" : dev}
+            </option>
           {/each}
         </select>
-        <span class="chevron" aria-hidden="true">▾</span>
+        <span class="absolute right-2.5 top-1/2 -translate-y-[52%] pointer-events-none text-[14px] leading-none text-muted font-mono">▾</span>
       </div>
-      <label class="persist-toggle">
+      <label class="inline-flex items-center gap-1.5 font-mono text-[11px] text-muted cursor-pointer">
         <input type="checkbox" bind:checked={savePersist} />
-        <span>persist to <code>config.toml</code></span>
+        <span>persist to <code class="bg-paper-2 px-1.5 py-px text-[10px]">config.toml</code></span>
       </label>
-      <button class="action-btn" onclick={applyDevice} disabled={switching}>
-        {switching ? "switching…" : "apply"}
-      </button>
+      <button
+        class="font-mono font-semibold text-[10px] tracking-[0.2em] uppercase px-2.5 py-1 border border-rule bg-transparent text-ink cursor-pointer transition-colors hover:bg-ink hover:text-paper disabled:opacity-50 disabled:cursor-progress"
+        onclick={applyDevice}
+        disabled={switching}
+      >{switching ? "switching…" : "apply"}</button>
     </div>
-    <p class="group-body small">
+    <p class="m-0 text-[11px] leading-[1.6] text-muted mt-1">
       cpal lists every PipeWire / PulseAudio / ALSA source the host knows
-      about. <code>(host default)</code> follows whatever PipeWire / Pulse
-      currently routes to.
+      about. <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">(host default)</code>
+      follows whatever PipeWire / Pulse currently routes to.
     </p>
   </div>
 
-  <div class="group">
-    <header class="group-head">
-      <span class="label-tracked group-label">Train your own wakeword</span>
+  <div class="mb-8 pb-6 border-b border-rule-soft">
+    <header class="flex items-baseline justify-between mb-2.5">
+      <span class="label-tracked text-ink font-bold">Train your own wakeword</span>
     </header>
-    <p class="group-body">
+    <p class="m-0 text-[12px] leading-[1.6] text-muted">
       horchd is intentionally trainerless — it loads any
-      openWakeWord-compatible <code>.onnx</code> classifier. Use
+      openWakeWord-compatible <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">.onnx</code> classifier. Use
       <strong>Lyna</strong>, the companion trainer/studio, to record
       samples, pick TTS voices for synthetic data, run training, and
-      export a model. Drop the resulting <code>.onnx</code> back into
+      export a model. Drop the resulting <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">.onnx</code> back into
       <em>Add → Import</em>.
     </p>
-    <div class="lyna-row">
-      <button class="action-btn primary" onclick={trainInLyna}>
+    <div class="flex items-center gap-3.5 mt-3">
+      <button
+        class="inline-flex items-center gap-1.5 font-mono font-semibold text-[10px] tracking-[0.2em] uppercase px-2.5 py-1 border border-ink bg-ink text-paper cursor-pointer transition-colors hover:bg-accent hover:border-accent"
+        onclick={trainInLyna}
+      >
         <Sparkles size="13" /> Open Lyna
       </button>
-      <span class="muted small">probes <code>localhost:5173</code> · falls back to GitHub</span>
+      <span class="text-muted text-[10px]">probes <code class="font-mono bg-paper-2 px-1.5 py-px text-[10px]">localhost:5173</code> · falls back to GitHub</span>
     </div>
   </div>
 
-  <div class="group">
-    <header class="group-head">
-      <span class="label-tracked group-label">About</span>
+  <div>
+    <header class="flex items-baseline justify-between mb-2.5">
+      <span class="label-tracked text-ink font-bold">About</span>
     </header>
-    <p class="group-body">
+    <p class="m-0 text-[12px] leading-[1.6] text-muted">
       horchd · native multi-wakeword detection daemon ·
-      <a href="https://github.com/horchd/horchd" target="_blank" rel="noopener">github.com/horchd/horchd</a>
+      <a class="text-accent border-b border-current no-underline" href="https://github.com/horchd/horchd" target="_blank" rel="noopener">github.com/horchd/horchd</a>
     </p>
   </div>
 </section>
-
-<style>
-  .settings {
-    padding-top: 28px;
-  }
-  .head {
-    margin-bottom: 24px;
-  }
-  .head h2 {
-    margin: 0;
-    color: var(--color-ink);
-    font-size: 11px;
-    font-weight: 700;
-  }
-  .group {
-    margin-bottom: 32px;
-    padding-bottom: 24px;
-    border-bottom: 1px solid var(--color-rule-soft);
-  }
-  .group-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 10px;
-  }
-  .group-label {
-    color: var(--color-ink);
-    font-weight: 700;
-  }
-  .group-body {
-    margin: 0;
-    font-size: 12px;
-    line-height: 1.6;
-    color: var(--color-muted);
-  }
-  .group-body a {
-    color: var(--color-accent);
-    text-decoration: none;
-    border-bottom: 1px solid currentColor;
-  }
-  .row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 0;
-    border-bottom: 1px solid var(--color-rule-soft);
-  }
-  .row:last-child {
-    border-bottom: 0;
-  }
-  .row-label {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .row-help {
-    font-size: 11px;
-    color: var(--color-muted);
-  }
-  .row-value {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--font-mono);
-  }
-  .badge {
-    padding: 2px 8px;
-    border: 1px solid currentColor;
-    font-size: 10px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    font-weight: 600;
-  }
-  .badge.ok { color: var(--color-ok); }
-  .badge.bad { color: var(--color-accent); }
-  .muted { color: var(--color-muted); font-size: 11px; }
-  .path {
-    font-size: 12px;
-    color: var(--color-ink);
-    background: var(--color-paper-2);
-    padding: 4px 8px;
-    border: 1px solid var(--color-rule-soft);
-    max-width: 360px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .copy-btn,
-  .action-btn {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    padding: 4px 10px;
-    border: 1px solid var(--color-rule);
-    background: transparent;
-    color: var(--color-ink);
-    cursor: pointer;
-    transition: background 0.18s ease, color 0.18s ease;
-  }
-  .copy-btn:hover,
-  .action-btn:hover {
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
-  .action-btn:disabled {
-    opacity: 0.5;
-    cursor: progress;
-  }
-
-  .device-row {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 12px;
-    align-items: center;
-    padding: 6px 0 12px;
-  }
-  .select-wrap {
-    position: relative;
-    min-width: 0;
-  }
-  .select {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    width: 100%;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    padding: 8px 32px 8px 12px;
-    background: var(--color-paper-2);
-    border: 1px solid var(--color-rule);
-    color: var(--color-ink);
-    cursor: pointer;
-    transition:
-      background 0.18s ease,
-      border-color 0.18s ease,
-      color 0.18s ease;
-    /* Long device names shouldn't break the row layout. */
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    overflow: hidden;
-  }
-  .select:hover {
-    border-color: var(--color-ink);
-    background: color-mix(in oklab, var(--color-paper-2) 70%, var(--color-paper-3));
-  }
-  .select:focus {
-    outline: 2px solid var(--color-accent);
-    outline-offset: -2px;
-  }
-  .select-wrap.disabled .select,
-  .select:disabled {
-    opacity: 0.5;
-    cursor: progress;
-  }
-  .chevron {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-52%);
-    pointer-events: none;
-    font-size: 14px;
-    line-height: 1;
-    color: var(--color-muted);
-    font-family: var(--font-mono);
-  }
-  .select-wrap:hover .chevron { color: var(--color-ink); }
-  /* Browser dropdown popup (limited but worth doing). */
-  .select option {
-    background: var(--color-paper);
-    color: var(--color-ink);
-    font-family: var(--font-mono);
-  }
-  .persist-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-muted);
-    cursor: pointer;
-  }
-  .persist-toggle code {
-    background: var(--color-paper-2);
-    padding: 1px 5px;
-    font-size: 10px;
-  }
-  .group-body.small {
-    font-size: 11px;
-    margin-top: 4px;
-  }
-  .help {
-    font-size: 10px;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-  .action-btn.primary {
-    background: var(--color-ink);
-    color: var(--color-paper);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .action-btn.primary:hover {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-  .lyna-row {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-top: 12px;
-  }
-  .small { font-size: 10px; }
-</style>

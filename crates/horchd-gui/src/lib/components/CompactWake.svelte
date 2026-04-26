@@ -13,10 +13,6 @@
   let row: HTMLElement | undefined = $state();
   let debounceId: ReturnType<typeof setTimeout> | undefined;
 
-  // Track which fire timestamp we already flashed for. Without this,
-  // any fire on any wake triggers `app.lastFires = {...spread}` which
-  // replaces the proxy ref, causing every CompactWake's effect to
-  // re-run and replay its old flash.
   let lastFlashTs = -1;
   $effect(() => {
     const fire = app.lastFires[wake.name];
@@ -24,9 +20,9 @@
     if (fire.ts_ms === lastFlashTs) return;
     lastFlashTs = fire.ts_ms;
     const target = row;
-    target.classList.remove("flash");
+    target.classList.remove("animate-flash");
     void target.offsetWidth;
-    target.classList.add("flash");
+    target.classList.add("animate-flash");
   });
 
   const lastFireLabel = $derived(((_: number) => {
@@ -57,7 +53,6 @@
   });
   const thresholdY = $derived(TRACE_H - local * TRACE_H);
 
-  // Fire counter in last 60 s — triggers tick re-render via app.tick.
   const recentFireCount = $derived(((_: number) => {
     const cutoff = Date.now() - 60_000;
     const arr = app.fireTimes[wake.name] ?? [];
@@ -88,38 +83,59 @@
 
 <article
   bind:this={row}
-  class="wake"
-  class:disabled={!wake.enabled}
+  class="grid items-center gap-3.5 px-4 py-3 bg-paper border border-rule
+         border-b-0 last:border-b transition-colors duration-200
+         grid-cols-[36px_minmax(140px,1.2fr)_minmax(220px,3fr)_auto]"
+  class:opacity-55={!wake.enabled}
   data-name={wake.name}
 >
   <button
-    class="toggle"
-    class:on={wake.enabled}
+    class="w-7 h-7 grid place-items-center border border-rule bg-transparent cursor-pointer
+           transition-colors duration-150 hover:bg-paper-2"
     onclick={toggle}
     title={wake.enabled ? "Disable + persist" : "Enable + persist"}
     aria-label={wake.enabled ? "Disable" : "Enable"}
   >
-    <span class="toggle-dot" class:fired={over && wake.enabled}></span>
+    <span
+      class="w-2.5 h-2.5 rounded-full transition-[background,box-shadow] duration-200"
+      class:bg-rule-soft={!wake.enabled}
+      class:bg-ok={wake.enabled && !(over && wake.enabled)}
+      class:bg-accent={over && wake.enabled}
+      class:shadow-[0_0_6px_color-mix(in_oklab,var(--color-accent)_60%,transparent)]={over && wake.enabled}
+    ></span>
   </button>
 
-  <div class="name-col">
-    <div class="name-row">
-      <span class="name">{wake.name}</span>
+  <div class="min-w-0">
+    <div class="flex items-baseline gap-2">
+      <span class="font-mono font-semibold text-[14px] text-ink overflow-hidden text-ellipsis whitespace-nowrap">{wake.name}</span>
       {#if recentFireCount > 0}
-        <span class="fire-badge" title="Fires in the last 60 s">{recentFireCount}× / 60s</span>
+        <span
+          class="font-mono text-[9px] tracking-[0.12em] uppercase font-semibold text-accent border border-accent px-1.5 py-px bg-[color-mix(in_oklab,var(--color-accent)_8%,transparent)]"
+          title="Fires in the last 60 s"
+        >{recentFireCount}× / 60s</span>
       {/if}
     </div>
-    <div class="meta" title={wake.model}>
+    <div
+      class="text-[10px] tracking-[0.05em] text-muted mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis"
+      title={wake.model}
+    >
       {wake.cooldown_ms} ms · last fire {lastFireLabel}
     </div>
   </div>
 
-  <div class="meter-col">
-    <div class="meter-row">
-      <div class="meter-wrap">
-        <div class="meter-fill" class:over style:width="{meterPct}%"></div>
+  <div class="min-w-0">
+    <div class="grid grid-cols-[1fr_auto] gap-3 items-center">
+      <div class="relative h-[18px]">
+        <div
+          class="absolute left-0 top-1/2 -mt-[3px] h-1.5 pointer-events-none transition-[width,background,opacity] duration-200"
+          class:bg-ink-soft={!over}
+          class:opacity-40={!over}
+          class:bg-accent={over}
+          class:opacity-100={over}
+          style:width="{meterPct}%"
+        ></div>
         <input
-          class="slider"
+          class="slider relative z-10"
           type="range"
           min="0"
           max="1"
@@ -128,15 +144,14 @@
           oninput={onInput}
         />
       </div>
-      <div class="readout">
-        <span class="live" class:over>{live !== undefined ? live.toFixed(3) : "—"}</span>
-        <span class="sep">/</span>
-        <span class="threshold">{local.toFixed(3)}</span>
+      <div class="font-mono text-[11px] text-muted tabular-nums inline-flex items-baseline gap-1 min-w-[7ch] text-right">
+        <span class:text-accent={over} class:font-semibold={over}>{live !== undefined ? live.toFixed(3) : "—"}</span>
+        <span class="text-rule-soft">/</span>
+        <span class="text-ink">{local.toFixed(3)}</span>
       </div>
     </div>
     <svg
-      class="trace"
-      class:over
+      class="block w-full h-[22px] mt-1.5"
       viewBox="0 0 {TRACE_W} {TRACE_H}"
       preserveAspectRatio="none"
       role="img"
@@ -147,22 +162,43 @@
         x2={TRACE_W}
         y1={thresholdY}
         y2={thresholdY}
-        class="trace-threshold"
+        class="stroke-rule-soft opacity-80"
+        stroke-width="1"
         stroke-dasharray="3 3"
       />
       {#if traceFillPath}
-        <path d={traceFillPath} class="trace-fill" />
+        <path
+          d={traceFillPath}
+          class="transition-[fill,opacity] duration-200"
+          class:fill-ink-soft={!over}
+          class:opacity-[0.12]={!over}
+          class:fill-accent={over}
+          class:opacity-[0.18]={over}
+        />
       {/if}
       {#if tracePath}
-        <path d={tracePath} class="trace-line" fill="none" />
+        <path
+          d={tracePath}
+          fill="none"
+          stroke-width="1.4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="transition-[stroke] duration-200"
+          class:stroke-ink-soft={!over}
+          class:stroke-accent={over}
+        />
       {/if}
     </svg>
   </div>
 
-  <div class="actions">
+  <div class="inline-flex gap-1">
     <button
-      class="icon-btn save-btn"
-      class:dirty
+      class="w-[26px] h-[26px] grid place-items-center border bg-transparent cursor-pointer
+             transition-colors duration-150 hover:bg-ink hover:text-paper hover:border-ink"
+      class:text-muted={!dirty}
+      class:border-rule-soft={!dirty}
+      class:text-accent={dirty}
+      class:border-accent={dirty}
       onclick={onSave}
       title="Persist threshold to config.toml"
       aria-label="Save threshold"
@@ -170,7 +206,9 @@
       <Save size="13" />
     </button>
     <button
-      class="icon-btn danger"
+      class="w-[26px] h-[26px] grid place-items-center border border-rule-soft bg-transparent
+             text-muted cursor-pointer transition-colors duration-150
+             hover:bg-accent hover:text-paper hover:border-accent"
       onclick={onRemove}
       title="Remove wakeword (keeps the .onnx)"
       aria-label="Remove"
@@ -179,226 +217,3 @@
     </button>
   </div>
 </article>
-
-<style>
-  .wake {
-    display: grid;
-    grid-template-columns: 36px minmax(140px, 1.2fr) minmax(220px, 3fr) auto;
-    align-items: center;
-    gap: 14px;
-    padding: 12px 16px;
-    border: 1px solid var(--color-rule);
-    border-bottom: 0;
-    background: var(--color-paper);
-    transition:
-      background 0.2s ease,
-      border-color 0.4s ease;
-  }
-  .wake:last-child {
-    border-bottom: 1px solid var(--color-rule);
-  }
-  .wake.disabled {
-    opacity: 0.55;
-  }
-
-  .toggle {
-    width: 28px;
-    height: 28px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--color-rule);
-    background: transparent;
-    cursor: pointer;
-    transition: background 0.18s ease, border-color 0.18s ease;
-  }
-  .toggle:hover {
-    background: var(--color-paper-2);
-  }
-  .toggle-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--color-rule-soft);
-    transition: background 0.2s ease, box-shadow 0.2s ease;
-  }
-  .toggle.on .toggle-dot {
-    background: var(--color-ok);
-  }
-  .toggle-dot.fired {
-    background: var(--color-accent);
-    box-shadow: 0 0 6px color-mix(in oklab, var(--color-accent) 60%, transparent);
-  }
-
-  .name-col {
-    min-width: 0;
-  }
-  .name-row {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .name {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--color-ink);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .fire-badge {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-weight: 600;
-    color: var(--color-accent);
-    border: 1px solid var(--color-accent);
-    padding: 1px 6px;
-    background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-  }
-  .meta {
-    font-size: 10px;
-    letter-spacing: 0.05em;
-    color: var(--color-muted);
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .meter-col {
-    min-width: 0;
-  }
-  .meter-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
-    align-items: center;
-  }
-  .meter-wrap {
-    position: relative;
-    height: 18px;
-  }
-  .meter-fill {
-    position: absolute;
-    left: 0;
-    top: 50%;
-    margin-top: -3px;
-    height: 6px;
-    background: var(--color-ink-soft);
-    transition:
-      width 0.18s ease,
-      background 0.25s ease,
-      opacity 0.25s ease;
-    pointer-events: none;
-    opacity: 0.42;
-  }
-  .meter-fill.over {
-    background: var(--color-accent);
-    opacity: 1;
-  }
-  .meter-wrap .slider {
-    position: relative;
-    z-index: 1;
-  }
-
-  .readout {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--color-muted);
-    font-variant-numeric: tabular-nums;
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
-    min-width: 7ch;
-    text-align: right;
-  }
-  .readout .live.over {
-    color: var(--color-accent);
-    font-weight: 600;
-  }
-  .readout .sep {
-    color: var(--color-rule-soft);
-  }
-  .readout .threshold {
-    color: var(--color-ink);
-  }
-
-  .actions {
-    display: inline-flex;
-    gap: 4px;
-  }
-  .icon-btn {
-    width: 26px;
-    height: 26px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--color-rule-soft);
-    background: transparent;
-    color: var(--color-muted);
-    cursor: pointer;
-    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-  }
-  .icon-btn:hover {
-    background: var(--color-ink);
-    color: var(--color-paper);
-    border-color: var(--color-ink);
-  }
-  .icon-btn.danger:hover {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: var(--color-paper);
-  }
-  .icon-btn.save-btn.dirty {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-
-  .trace {
-    width: 100%;
-    height: 22px;
-    margin-top: 6px;
-    display: block;
-  }
-  .trace-threshold {
-    stroke: var(--color-rule-soft);
-    stroke-width: 1;
-    opacity: 0.8;
-  }
-  .trace-line {
-    stroke: var(--color-ink-soft);
-    stroke-width: 1.4;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-    transition: stroke 0.25s ease;
-  }
-  .trace-fill {
-    fill: var(--color-ink-soft);
-    opacity: 0.12;
-    transition: fill 0.25s ease, opacity 0.25s ease;
-  }
-  .trace.over .trace-line { stroke: var(--color-accent); }
-  .trace.over .trace-fill { fill: var(--color-accent); opacity: 0.18; }
-
-  @keyframes wake-flash {
-    0% {
-      background: color-mix(in oklab, var(--color-accent) 38%, var(--color-paper));
-      border-color: var(--color-accent);
-      box-shadow: inset 4px 0 0 var(--color-accent);
-    }
-    30% {
-      background: color-mix(in oklab, var(--color-accent) 22%, var(--color-paper));
-      border-color: var(--color-accent);
-      box-shadow: inset 4px 0 0 var(--color-accent);
-    }
-    100% {
-      background: var(--color-paper);
-      border-color: var(--color-rule);
-      box-shadow: none;
-    }
-  }
-  :global(.flash) {
-    animation: wake-flash 1.6s cubic-bezier(0.2, 0.7, 0.2, 1);
-  }
-</style>

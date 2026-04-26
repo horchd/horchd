@@ -4,37 +4,12 @@
 
 {#if app.toast}
   {@const t = app.toast}
-  <div class="toast hair" class:error={t.isError} role="status">{t.msg}</div>
+  {@const errorBoxShadow = "shadow-[4px_4px_0_var(--color-accent-dim)]"}
+  {@const okBoxShadow = "shadow-[4px_4px_0_var(--color-ink)]"}
+  <div
+    class="fixed bottom-5 left-1/2 -translate-x-1/2 px-[18px] py-[10px] bg-paper border z-[100] animate-toast-in {t.isError ? `text-accent border-accent ${errorBoxShadow}` : `border-rule ${okBoxShadow}`}"
+    role="status"
+  >
+    <span class="text-[11px] tracking-[0.16em] uppercase">{t.msg}</span>
+  </div>
 {/if}
-
-<style>
-  .toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 18px;
-    background: var(--color-paper);
-    font-size: 11px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    box-shadow: 4px 4px 0 var(--color-ink);
-    z-index: 100;
-    animation: slide-in 0.2s ease;
-  }
-  .toast.error {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-    box-shadow: 4px 4px 0 var(--color-accent-dim);
-  }
-  @keyframes slide-in {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-  }
-</style>

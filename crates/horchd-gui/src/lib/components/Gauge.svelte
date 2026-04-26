@@ -7,18 +7,12 @@
 </script>
 
 <div>
-  <div class="label-tracked text-(--color-muted) mb-2">{label}</div>
+  <div class="label-tracked text-muted mb-2">{label}</div>
   <div class="flex items-baseline">
-    <span class="numeral text-[64px] leading-none" class:dim={!reachable}>
+    <span class="numeral text-[64px] leading-none" class:text-muted={!reachable}>
       {reachable ? fmtFloat(value) : "—"}
     </span>
-    <span class="ml-2 label-tracked text-(--color-muted)">fps</span>
+    <span class="ml-2 label-tracked text-muted">fps</span>
   </div>
   <Spark {history} />
 </div>
-
-<style>
-  .dim {
-    color: var(--color-muted);
-  }
-</style>

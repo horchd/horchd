@@ -15,30 +15,13 @@
   );
 </script>
 
-<div class="spark">
+<div class="mt-3.5 flex items-end gap-[2px] h-7 border-b border-rule-soft">
   {#each bars as bar, i (i)}
-    <span class="bar" class:peak={bar.peak} style:height={bar.h + "px"}></span>
+    <span
+      class="flex-1 min-w-[2px] transition-[height,background] duration-300"
+      class:bg-ink-soft={!bar.peak}
+      class:bg-accent={bar.peak}
+      style:height={bar.h + "px"}
+    ></span>
   {/each}
 </div>
-
-<style>
-  .spark {
-    margin-top: 14px;
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 28px;
-    border-bottom: 1px solid var(--color-rule-soft);
-  }
-  .bar {
-    flex: 1;
-    min-width: 2px;
-    background: var(--color-ink-soft);
-    transition:
-      height 0.3s ease,
-      background 0.3s ease;
-  }
-  .bar.peak {
-    background: var(--color-accent);
-  }
-</style>

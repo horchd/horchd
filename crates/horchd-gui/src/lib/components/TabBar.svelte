@@ -7,58 +7,25 @@
   let { tabs, active, onSelect }: Props = $props();
 </script>
 
-<nav class="tabs hair-b" aria-label="Sections">
+<nav class="flex gap-0 mt-7 border-b border-rule" aria-label="Sections">
   {#each tabs as tab (tab.id)}
     <button
       type="button"
-      class="tab label-tracked"
-      class:active={tab.id === active}
+      class="px-[18px] py-3 inline-flex items-center gap-2 label-tracked font-semibold cursor-pointer
+             border-r border-rule-soft last:border-r-0 transition-colors duration-150
+             hover:text-ink"
+      class:text-muted={tab.id !== active}
+      class:text-ink={tab.id === active}
+      class:bg-[color-mix(in_oklab,var(--color-paper-3)_50%,transparent)]={tab.id === active}
+      class:shadow-[inset_0_-2px_0_var(--color-accent)]={tab.id === active}
       onclick={() => onSelect(tab.id)}
     >
       {tab.label}
       {#if tab.badge !== undefined}
-        <span class="badge">{tab.badge}</span>
+        <span class="inline-block min-w-[18px] text-center px-[5px] py-px text-[9px] tracking-[0.1em] text-ink border border-rule-soft bg-[color-mix(in_oklab,var(--color-paper-3)_70%,transparent)]">
+          {tab.badge}
+        </span>
       {/if}
     </button>
   {/each}
 </nav>
-
-<style>
-  .tabs {
-    display: flex;
-    gap: 0;
-    margin-top: 28px;
-  }
-  .tab {
-    background: transparent;
-    border: 0;
-    border-right: 1px solid var(--color-rule-soft);
-    padding: 12px 18px;
-    font-weight: 600;
-    color: var(--color-muted);
-    cursor: pointer;
-    transition: color 0.18s ease, background 0.18s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .tab:hover {
-    color: var(--color-ink);
-  }
-  .tab.active {
-    color: var(--color-ink);
-    background: color-mix(in oklab, var(--color-paper-3) 50%, transparent);
-    box-shadow: inset 0 -2px 0 var(--color-accent);
-  }
-  .badge {
-    display: inline-block;
-    min-width: 18px;
-    text-align: center;
-    padding: 1px 5px;
-    background: color-mix(in oklab, var(--color-paper-3) 70%, transparent);
-    border: 1px solid var(--color-rule-soft);
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    color: var(--color-ink);
-  }
-</style>

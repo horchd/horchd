@@ -36,7 +36,6 @@
     input.onchange = () => {
       const f = input.files?.[0];
       if (!f) return;
-      // Browser can't always expose the path; Tauri's webview does.
       // @ts-expect-error Tauri injects `path` on File on Linux/macOS
       model = f.path ?? f.name;
       if (!name) {
@@ -88,45 +87,60 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="scrim" role="dialog" aria-modal="true" aria-labelledby="add-modal-title">
-  <button class="scrim-bg" onclick={onClose} aria-label="Close" tabindex="-1"></button>
+<div class="fixed inset-0 grid place-items-center z-50 animate-fadein" role="dialog" aria-modal="true" aria-labelledby="add-modal-title">
+  <button
+    class="absolute inset-0 border-0 cursor-default
+           bg-[color-mix(in_oklab,var(--color-paper)_30%,transparent)] backdrop-blur-md"
+    onclick={onClose}
+    aria-label="Close"
+    tabindex="-1"
+  ></button>
 
-  <form class="modal" onsubmit={submit}>
-    <header class="modal-head">
-      <h3 id="add-modal-title" class="wordmark">Add wakeword.</h3>
-      <p class="hint">
-        <strong>Import</strong> copies the model into <code>{modelsDir}</code> first;
+  <form
+    class="relative z-10 w-[min(520px,calc(100vw-32px))] bg-paper border border-rule
+           px-6 pt-6 pb-5 shadow-[8px_8px_0_var(--color-ink)]"
+    onsubmit={submit}
+  >
+    <header class="mb-4">
+      <h3 id="add-modal-title" class="wordmark mb-1.5 text-[26px] leading-none">Add wakeword.</h3>
+      <p class="text-muted text-[12px] leading-[1.5]">
+        <strong>Import</strong> copies the model into
+        <code class="font-mono text-[11px] bg-paper-2 px-1.5 py-px">{modelsDir}</code> first;
         <strong>Register</strong> uses the file in place. Need a custom
-        wakeword? <button type="button" class="train-link" onclick={trainInLyna}>
+        wakeword?
+        <button
+          type="button"
+          class="inline-flex items-center gap-1 bg-transparent border-0 p-0 font-inherit
+                 text-accent border-b border-current cursor-pointer hover:text-ink"
+          onclick={trainInLyna}
+        >
           <Sparkles size="11" /> train one in Lyna
         </button>.
       </p>
     </header>
 
-    <div class="modes label-tracked">
-      <button
-        type="button"
-        class="mode"
-        class:active={mode === "import"}
-        onclick={() => (mode = "import")}
-      >
-        Import
-      </button>
-      <button
-        type="button"
-        class="mode"
-        class:active={mode === "register"}
-        onclick={() => (mode = "register")}
-      >
-        Register
-      </button>
+    <div class="inline-flex mb-[18px] border border-rule label-tracked">
+      {#each ["import", "register"] as m (m)}
+        <button
+          type="button"
+          class="bg-transparent border-0 border-r border-rule-soft last:border-r-0 px-3.5 py-1.5
+                 font-semibold cursor-pointer transition-colors duration-150"
+          class:bg-ink={mode === m}
+          class:text-paper={mode === m}
+          class:text-muted={mode !== m}
+          onclick={() => (mode = m as Mode)}
+        >
+          {m === "import" ? "Import" : "Register"}
+        </button>
+      {/each}
     </div>
 
-    <div class="field">
-      <label for="add-name" class="label-tracked">Name</label>
+    <div class="mb-3.5">
+      <label for="add-name" class="block text-muted mb-1 label-tracked">Name</label>
       <input
         id="add-name"
-        class="field-input"
+        class="w-full px-2.5 py-2 bg-paper-2 border border-rule font-mono text-[13px] text-ink
+               focus:outline-2 focus:outline-accent focus:-outline-offset-1"
         type="text"
         bind:value={name}
         autocomplete="off"
@@ -134,12 +148,15 @@
       />
     </div>
 
-    <div class="field">
-      <label for="add-model" class="label-tracked">Source <code>.onnx</code></label>
-      <div class="file-row">
+    <div class="mb-3.5">
+      <label for="add-model" class="block text-muted mb-1 label-tracked">
+        Source <code class="font-mono">.onnx</code>
+      </label>
+      <div class="grid grid-cols-[1fr_auto] gap-2">
         <input
           id="add-model"
-          class="field-input"
+          class="w-full px-2.5 py-2 bg-paper-2 border border-rule font-mono text-[13px] text-ink
+                 focus:outline-2 focus:outline-accent focus:-outline-offset-1"
           type="text"
           bind:value={model}
           spellcheck="false"
@@ -147,16 +164,23 @@
             ? "/path/to/your/model.onnx"
             : "~/.local/share/horchd/models/lyna.onnx"}
         />
-        <button type="button" class="browse" onclick={pickFile}>Browse…</button>
+        <button
+          type="button"
+          class="font-mono font-semibold text-[11px] tracking-[0.16em] uppercase
+                 px-3.5 border border-rule bg-transparent text-ink cursor-pointer
+                 transition-colors duration-150 hover:bg-ink hover:text-paper"
+          onclick={pickFile}
+        >Browse…</button>
       </div>
     </div>
 
-    <div class="field grid-two">
+    <div class="grid grid-cols-2 gap-3 mb-4">
       <div>
-        <label for="add-threshold" class="label-tracked">Threshold</label>
+        <label for="add-threshold" class="block text-muted mb-1 label-tracked">Threshold</label>
         <input
           id="add-threshold"
-          class="field-input"
+          class="w-full px-2.5 py-2 bg-paper-2 border border-rule font-mono text-[13px] text-ink
+                 focus:outline-2 focus:outline-accent focus:-outline-offset-1"
           type="number"
           step="0.01"
           min="0"
@@ -165,10 +189,11 @@
         />
       </div>
       <div>
-        <label for="add-cooldown" class="label-tracked">Cooldown (ms)</label>
+        <label for="add-cooldown" class="block text-muted mb-1 label-tracked">Cooldown (ms)</label>
         <input
           id="add-cooldown"
-          class="field-input"
+          class="w-full px-2.5 py-2 bg-paper-2 border border-rule font-mono text-[13px] text-ink
+                 focus:outline-2 focus:outline-accent focus:-outline-offset-1"
           type="number"
           step="100"
           min="0"
@@ -178,185 +203,30 @@
     </div>
 
     {#if error}
-      <div class="error">{error}</div>
+      <div class="text-accent text-[12px] px-2.5 py-2 border border-accent
+                  bg-[color-mix(in_oklab,var(--color-accent)_8%,var(--color-paper))] mb-3">
+        {error}
+      </div>
     {/if}
 
-    <div class="actions">
-      <button type="button" class="btn ghost" onclick={onClose}>Cancel</button>
-      <button type="submit" class="btn primary" disabled={busy}>
+    <div class="flex justify-end gap-2 mt-3">
+      <button
+        type="button"
+        class="font-mono font-semibold text-[11px] tracking-[0.18em] uppercase px-[18px] py-2.5
+               border border-rule-soft bg-transparent text-muted cursor-pointer
+               transition-colors duration-150 hover:bg-ink hover:text-paper"
+        onclick={onClose}
+      >Cancel</button>
+      <button
+        type="submit"
+        class="font-mono font-semibold text-[11px] tracking-[0.18em] uppercase px-[18px] py-2.5
+               border border-rule bg-ink text-paper cursor-pointer transition-colors duration-150
+               disabled:opacity-50 disabled:cursor-progress
+               hover:not-disabled:bg-accent hover:not-disabled:border-accent"
+        disabled={busy}
+      >
         {busy ? "Working…" : mode === "import" ? "Import + register" : "Register"}
       </button>
     </div>
   </form>
 </div>
-
-<style>
-  .scrim {
-    position: fixed;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    z-index: 50;
-    animation: fadein 0.2s ease;
-  }
-  @keyframes fadein {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  .scrim-bg {
-    position: absolute;
-    inset: 0;
-    background: color-mix(in oklab, var(--color-paper) 30%, transparent);
-    backdrop-filter: blur(6px);
-    border: 0;
-    cursor: default;
-  }
-  .modal {
-    position: relative;
-    z-index: 1;
-    width: min(520px, calc(100vw - 32px));
-    background: var(--color-paper);
-    border: 1px solid var(--color-rule);
-    padding: 24px 24px 20px;
-    box-shadow: 8px 8px 0 var(--color-ink);
-  }
-  .modal-head { margin-bottom: 16px; }
-  .wordmark {
-    margin: 0 0 6px;
-    font-size: 26px;
-    line-height: 1;
-  }
-  .hint {
-    margin: 0;
-    color: var(--color-muted);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-  .hint code {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    background: var(--color-paper-2);
-    padding: 1px 5px;
-  }
-  .train-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: transparent;
-    border: 0;
-    padding: 0;
-    font: inherit;
-    color: var(--color-accent);
-    border-bottom: 1px solid currentColor;
-    cursor: pointer;
-  }
-  .train-link:hover {
-    color: var(--color-ink);
-  }
-
-  .modes {
-    display: inline-flex;
-    margin-bottom: 18px;
-    border: 1px solid var(--color-rule);
-  }
-  .mode {
-    background: transparent;
-    border: 0;
-    border-right: 1px solid var(--color-rule-soft);
-    padding: 6px 14px;
-    font-weight: 600;
-    color: var(--color-muted);
-    cursor: pointer;
-    transition: color 0.18s ease, background 0.18s ease;
-  }
-  .mode:last-child { border-right: 0; }
-  .mode.active {
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
-
-  .field {
-    margin-bottom: 14px;
-  }
-  .field label {
-    display: block;
-    color: var(--color-muted);
-    margin-bottom: 4px;
-  }
-  .grid-two {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-  .file-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 8px;
-  }
-  .browse {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    font-size: 11px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    padding: 0 14px;
-    border: 1px solid var(--color-rule);
-    background: transparent;
-    color: var(--color-ink);
-    cursor: pointer;
-    transition: background 0.18s ease, color 0.18s ease;
-  }
-  .browse:hover {
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
-
-  .error {
-    color: var(--color-accent);
-    font-size: 12px;
-    padding: 8px 10px;
-    border: 1px solid var(--color-accent);
-    background: color-mix(in oklab, var(--color-accent) 8%, var(--color-paper));
-    margin-bottom: 12px;
-  }
-
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 12px;
-  }
-  .btn {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    font-size: 11px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    padding: 10px 18px;
-    border: 1px solid var(--color-rule);
-    background: transparent;
-    color: var(--color-ink);
-    cursor: pointer;
-    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
-  .btn.primary {
-    background: var(--color-ink);
-    color: var(--color-paper);
-  }
-  .btn.primary:hover:not(:disabled) {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: progress;
-  }
-  .btn.ghost {
-    color: var(--color-muted);
-    border-color: var(--color-rule-soft);
-  }
-</style>
