@@ -197,17 +197,19 @@ Plex Mono** for everything else, hairline borders instead of rounded
 corners.
 
 ```bash
-cd crates/horchd-gui/src-web
-bun install
-bun run build         # outputs to src-web/build/
+cd crates/horchd-gui
 
-cd ..
-cargo run --release   # opens the tray + window; daemon must be running
+# Dev: vite dev server + Tauri shell with HMR (auto-spawns both)
+cargo tauri dev
+
+# Production native bundle (.deb / .rpm / .AppImage)
+cargo tauri build
 ```
 
-See [crates/horchd-gui/README.md](crates/horchd-gui/README.md) for the
-full bootstrap (Linux dev headers + Tauri CLI for `cargo tauri build`
-to produce `.deb`/`.rpm`/`.AppImage`).
+The crate follows the canonical Tauri 2 + SvelteKit layout — frontend
+at `crates/horchd-gui/`, Rust + `tauri.conf.json` at
+`crates/horchd-gui/src-tauri/`. Bootstrap (Linux dev headers + Tauri
+CLI) is in [crates/horchd-gui/README.md](crates/horchd-gui/README.md).
 
 The Wayland workaround for `Gdk Error 71` (NVIDIA + webkit2gtk +
 Wayland) is set automatically inside the binary; nothing to configure.

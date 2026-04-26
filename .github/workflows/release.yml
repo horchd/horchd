@@ -31,9 +31,9 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-        working-directory: crates/horchd-gui/src-web
+        working-directory: crates/horchd-gui
       - run: bun run build
-        working-directory: crates/horchd-gui/src-web
+        working-directory: crates/horchd-gui
 
       - name: Build daemon + CLI
         run: cargo build --release --bin horchd --bin horchctl

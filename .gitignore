@@ -5,5 +5,5 @@
 /plan.md
 /shared-models/*.onnx
 # Tauri auto-generates these on every build
-/crates/horchd-gui/gen/
-/crates/horchd-gui/icons/.gitkeep
+/crates/horchd-gui/src-tauri/gen/
+/crates/horchd-gui/gen/        # legacy location, kept ignored for safety

@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "xyz.horchd.gui",
   "build": {
-    "beforeDevCommand": "cd src-web && bun run dev",
-    "beforeBuildCommand": "cd src-web && bun run build",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun install --frozen-lockfile && bun run build",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "src-web/build"
+    "frontendDist": "../build"
   },
   "app": {
     "windows": [
