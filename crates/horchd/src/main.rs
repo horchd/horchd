@@ -1,13 +1,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use horchd_core::Config;
+use horchd_core::{Config, WakewordEvent};
+use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
+use zbus::Connection;
+use zbus::object_server::SignalEmitter;
 
 mod audio;
+mod detector;
 mod inference;
 mod service;
 
@@ -17,6 +21,10 @@ const DBUS_PATH: &str = "/xyz/horchd/Daemon";
 /// Tokio mpsc capacity for raw audio frames.
 /// 16 frames * 80 ms = 1.28 s of headroom against inference back-pressure.
 const AUDIO_CHANNEL_CAPACITY: usize = 16;
+
+/// Broadcast capacity for `Detected` events. 64 fires * cooldown is
+/// minutes of headroom — slow subscribers won't lose anything realistic.
+const EVENT_BROADCAST_CAPACITY: usize = 64;
 
 /// Stats log cadence. Quiet enough for an always-on daemon; loud enough
 /// that "is it running?" is one `journalctl --user -fu horchd` away.
@@ -82,17 +90,40 @@ async fn main() -> Result<()> {
         names = ?classifiers.iter().map(|c| &c.name).collect::<Vec<_>>(),
         "classifiers loaded"
     );
+    let detectors: Vec<detector::Detector> = config
+        .wakewords
+        .iter()
+        .map(|w| detector::Detector::new(w.name.clone(), w.threshold, w.cooldown_ms, w.enabled))
+        .collect();
     let pipeline = inference::InferencePipeline::new(preprocessor, classifiers);
 
     let (audio_handle, frames) = audio::start(&config.engine.device, AUDIO_CHANNEL_CAPACITY)
         .context("starting audio capture")?;
-    let stats = Arc::clone(&audio_handle.stats);
+    let audio_stats = Arc::clone(&audio_handle.stats);
+    let inference_stats = Arc::new(inference::InferenceStats::new());
 
-    tokio::spawn(run_inference(frames, pipeline));
-    tokio::spawn(log_stats(Arc::clone(&stats), STATS_LOG_INTERVAL));
+    let (event_tx, _) = broadcast::channel::<WakewordEvent>(EVENT_BROADCAST_CAPACITY);
 
-    let daemon = service::Daemon::new(config, cli.config.clone(), stats);
-    let _conn = zbus::connection::Builder::session()?
+    tokio::spawn(run_inference(
+        frames,
+        pipeline,
+        detectors,
+        event_tx.clone(),
+        Arc::clone(&inference_stats),
+    ));
+    tokio::spawn(log_stats(
+        Arc::clone(&audio_stats),
+        Arc::clone(&inference_stats),
+        STATS_LOG_INTERVAL,
+    ));
+
+    let daemon = service::Daemon::new(
+        config,
+        cli.config.clone(),
+        Arc::clone(&audio_stats),
+        Arc::clone(&inference_stats),
+    );
+    let conn = zbus::connection::Builder::session()?
         .name(DBUS_NAME)?
         .serve_at(DBUS_PATH, daemon)?
         .build()
@@ -104,53 +135,93 @@ async fn main() -> Result<()> {
         "registered on session bus"
     );
 
+    tokio::spawn(emit_signals(conn.clone(), event_tx.subscribe()));
+
     shutdown_signal().await;
     tracing::info!("shutdown");
     Ok(())
 }
 
-/// Pull audio frames as they arrive, push each through the inference
-/// pipeline, log scores. Phase 5 will route fires through a broadcast
-/// channel into the D-Bus `Detected` signal emitter.
 async fn run_inference(
     mut frames: tokio::sync::mpsc::Receiver<audio::Frame>,
     mut pipeline: inference::InferencePipeline,
+    mut detectors: Vec<detector::Detector>,
+    events: broadcast::Sender<WakewordEvent>,
+    stats: Arc<inference::InferenceStats>,
 ) {
     while let Some(frame) = frames.recv().await {
-        // Inference is CPU-bound; offload so we don't block the runtime.
         let result = tokio::task::block_in_place(|| pipeline.process(&frame));
-        match result {
-            Ok(scores) if !scores.is_empty() => {
-                tracing::trace!(?scores, "scores");
-                if let Some((name, score)) = scores
-                    .iter()
-                    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-                    .filter(|(_, s)| *s > 0.5)
-                {
-                    tracing::debug!(
-                        name,
-                        score,
-                        "candidate fire (threshold check lives in Phase 5)"
-                    );
-                }
+        let scores = match result {
+            Ok(scores) => scores,
+            Err(err) => {
+                tracing::error!(?err, "inference failed");
+                continue;
             }
-            Ok(_) => {}
-            Err(err) => tracing::error!(?err, "inference failed"),
+        };
+        stats.record_score();
+
+        let now = Instant::now();
+        for (det, (name, score)) in detectors.iter_mut().zip(scores.iter()) {
+            debug_assert_eq!(name, &det.name, "detector/classifier order mismatch");
+            let Some(event) = det.update(f64::from(*score), now) else {
+                continue;
+            };
+            tracing::info!(name = %event.name, score = event.score, ts_us = event.timestamp_us, "wakeword detected");
+            // Fire-and-forget: send only fails if every receiver has been
+            // dropped, which means no D-Bus subscriber cares right now.
+            let _ = events.send(event);
         }
     }
     tracing::warn!("audio frame channel closed");
 }
 
-async fn log_stats(stats: Arc<audio::AudioStats>, interval: Duration) {
+async fn emit_signals(conn: Connection, mut events: broadcast::Receiver<WakewordEvent>) {
+    use tokio::sync::broadcast::error::RecvError;
+    loop {
+        match events.recv().await {
+            Ok(event) => emit_one(&conn, &event).await,
+            Err(RecvError::Lagged(n)) => {
+                tracing::warn!(skipped = n, "signal emitter lagged behind broadcast")
+            }
+            Err(RecvError::Closed) => {
+                tracing::info!("event broadcast closed; signal emitter exiting");
+                break;
+            }
+        }
+    }
+}
+
+async fn emit_one(conn: &Connection, event: &WakewordEvent) {
+    let emitter = match SignalEmitter::new(conn, DBUS_PATH) {
+        Ok(e) => e,
+        Err(err) => {
+            tracing::error!(?err, "creating SignalEmitter");
+            return;
+        }
+    };
+    if let Err(err) =
+        service::Daemon::detected(&emitter, &event.name, event.score, event.timestamp_us).await
+    {
+        tracing::error!(?err, name = %event.name, "emitting Detected signal");
+    }
+}
+
+async fn log_stats(
+    audio: Arc<audio::AudioStats>,
+    inference: Arc<inference::InferenceStats>,
+    interval: Duration,
+) {
     let mut tick = tokio::time::interval(interval);
     tick.tick().await; // skip immediate first tick
     loop {
         tick.tick().await;
         tracing::debug!(
-            audio_fps = format_args!("{:.2}", stats.audio_fps()),
-            emitted = stats.frames_emitted(),
-            dropped = stats.frames_dropped(),
-            "audio stats"
+            audio_fps = format_args!("{:.2}", audio.audio_fps()),
+            score_fps = format_args!("{:.2}", inference.score_fps()),
+            audio_emitted = audio.frames_emitted(),
+            audio_dropped = audio.frames_dropped(),
+            scores = inference.scores_emitted(),
+            "stats"
         );
     }
 }

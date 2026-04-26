@@ -13,6 +13,8 @@
 
 use std::collections::VecDeque;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use ndarray::{Array2, Array3, Array4};
@@ -280,6 +282,45 @@ fn validate_classifier_shape(session: &Session, name: &str, path: &Path) -> Resu
 /// anything positive must equal `expected`.
 fn dim_matches(dim: i64, expected: i64) -> bool {
     dim <= 0 || dim == expected
+}
+
+/// Counts inference work for the `score_fps` field of `GetStatus`.
+/// At steady state matches the audio fps (12.5).
+#[derive(Debug)]
+pub struct InferenceStats {
+    started_at: Instant,
+    scores_emitted: AtomicU64,
+}
+
+impl InferenceStats {
+    pub fn new() -> Self {
+        Self {
+            started_at: Instant::now(),
+            scores_emitted: AtomicU64::new(0),
+        }
+    }
+
+    pub fn score_fps(&self) -> f64 {
+        let elapsed = self.started_at.elapsed().as_secs_f64();
+        match elapsed > 0.0 {
+            true => self.scores_emitted.load(Ordering::Relaxed) as f64 / elapsed,
+            false => 0.0,
+        }
+    }
+
+    pub fn scores_emitted(&self) -> u64 {
+        self.scores_emitted.load(Ordering::Relaxed)
+    }
+
+    pub fn record_score(&self) {
+        self.scores_emitted.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+impl Default for InferenceStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Combines a [`Preprocessor`] with N [`Classifier`]s and a 16-frame

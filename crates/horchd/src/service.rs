@@ -10,21 +10,30 @@ use std::sync::Arc;
 use horchd_core::{Config, WakewordSnapshot};
 use tokio::sync::RwLock;
 use zbus::interface;
+use zbus::object_server::SignalEmitter;
 
 use crate::audio::AudioStats;
+use crate::inference::InferenceStats;
 
 pub struct Daemon {
     config: Arc<RwLock<Config>>,
     audio_stats: Arc<AudioStats>,
+    inference_stats: Arc<InferenceStats>,
     #[allow(dead_code)] // used by Reload / persist flows in later phases
     config_path: PathBuf,
 }
 
 impl Daemon {
-    pub fn new(config: Config, config_path: PathBuf, audio_stats: Arc<AudioStats>) -> Self {
+    pub fn new(
+        config: Config,
+        config_path: PathBuf,
+        audio_stats: Arc<AudioStats>,
+        inference_stats: Arc<InferenceStats>,
+    ) -> Self {
         Self {
             config: Arc::new(RwLock::new(config)),
             audio_stats,
+            inference_stats,
             config_path,
         }
     }
@@ -50,9 +59,23 @@ impl Daemon {
             .collect()
     }
 
-    /// `(running, audio_fps, score_fps)`. Score-fps stays at zero until
-    /// the inference pipeline lands in Phase 4.
+    /// `(running, audio_fps, score_fps)`.
     async fn get_status(&self) -> (bool, f64, f64) {
-        (true, self.audio_stats.audio_fps(), 0.0)
+        (
+            true,
+            self.audio_stats.audio_fps(),
+            self.inference_stats.score_fps(),
+        )
     }
+
+    /// Emitted on the rising edge when a wakeword's score crosses its
+    /// threshold for the first time within a cooldown window. Subscribers
+    /// receive `(name, score, timestamp_us)`.
+    #[zbus(signal)]
+    pub async fn detected(
+        emitter: &SignalEmitter<'_>,
+        name: &str,
+        score: f64,
+        timestamp_us: u64,
+    ) -> zbus::Result<()>;
 }

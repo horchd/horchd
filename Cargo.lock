@@ -705,6 +705,7 @@ dependencies = [
  "clap",
  "cpal",
  "horchd-core",
+ "libc",
  "ndarray",
  "ort",
  "serde",
