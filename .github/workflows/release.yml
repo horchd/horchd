@@ -1,0 +1,62 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: linux release binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libdbus-1-dev libgtk-3-dev \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+        working-directory: crates/horchd-gui/src-web
+      - run: bun run build
+        working-directory: crates/horchd-gui/src-web
+
+      - name: Build daemon + CLI
+        run: cargo build --release --bin horchd --bin horchctl
+
+      - name: Stage release tarball
+        id: tarball
+        run: |
+          tag="${GITHUB_REF_NAME:-$(git describe --tags --always)}"
+          arch=$(uname -m)
+          name="horchd-${tag}-linux-${arch}"
+          mkdir -p "dist/${name}/bin" "dist/${name}/share/horchd" "dist/${name}/lib/systemd/user"
+          cp target/release/horchd  "dist/${name}/bin/"
+          cp target/release/horchctl "dist/${name}/bin/"
+          cp systemd/horchd.service "dist/${name}/lib/systemd/user/"
+          cp examples/*           "dist/${name}/share/horchd/"
+          cp README.md LICENSE-MIT LICENSE-APACHE "dist/${name}/"
+          tar -C dist -czf "${name}.tar.gz" "${name}"
+          sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ steps.tarball.outputs.name }}.tar.gz
+            ${{ steps.tarball.outputs.name }}.tar.gz.sha256
