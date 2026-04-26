@@ -13,9 +13,16 @@
   let row: HTMLElement | undefined = $state();
   let debounceId: ReturnType<typeof setTimeout> | undefined;
 
+  // Track which fire timestamp we already flashed for. Without this,
+  // any fire on any wake triggers `app.lastFires = {...spread}` which
+  // replaces the proxy ref, causing every CompactWake's effect to
+  // re-run and replay its old flash.
+  let lastFlashTs = -1;
   $effect(() => {
     const fire = app.lastFires[wake.name];
     if (!fire || !row) return;
+    if (fire.ts_ms === lastFlashTs) return;
+    lastFlashTs = fire.ts_ms;
     const target = row;
     target.classList.remove("flash");
     void target.offsetWidth;
