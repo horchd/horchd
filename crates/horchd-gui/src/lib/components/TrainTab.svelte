@@ -5,6 +5,7 @@
   import { dbus, onTrain } from "$lib/dbus";
   import { openRecorder, PCM_SAMPLE_RATE, type Recorder } from "$lib/audio/recordPcm";
   import type { SampleKind, TrainingSample, TrainingWord } from "$lib/types";
+  import TrainingEnvCard from "./TrainingEnvCard.svelte";
 
   const TAKE_MS = 2000;
   const MAX_LOG_LINES = 400;
@@ -327,10 +328,14 @@
     <p class="text-muted text-[11px] mt-1.5 leading-[1.55]">
       Record short fixed-length takes of your target phrase; samples are
       stored as 16 kHz mono WAV under
-      <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">{trainingDir}</code>
-      so the openWakeWord training subprocess can read them directly.
+      <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px] selectable">{trainingDir}</code>.
+      The Train button hands them to a managed Python venv that runs the
+      openWakeWord pipeline — you don't need Python on your system, just
+      <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">uv</code>.
     </p>
   </header>
+
+  <TrainingEnvCard />
 
   <div class="mb-6 pb-5 border-b border-rule-soft">
     <header class="flex items-baseline justify-between mb-2.5">

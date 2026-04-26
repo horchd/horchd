@@ -12,6 +12,7 @@ import type {
   SampleKind,
   ScorePayload,
   TrainEvent,
+  TrainingEnvStatus,
   TrainingSample,
   TrainingWord,
   WakewordRow,
@@ -74,12 +75,21 @@ export const dbus = {
       augmentPerRecording: opts?.augmentPerRecording,
       steps: opts?.steps,
     }),
+  trainingEnvStatus: () => invoke<TrainingEnvStatus>("training_env_status"),
+  setupTrainingEnv: () => invoke<string>("setup_training_env"),
+  fetchNegatives: () => invoke<string>("fetch_negatives"),
 };
 
 export async function onTrain(
   cb: (payload: TrainEvent) => void,
 ): Promise<UnlistenFn> {
   return listen<TrainEvent>("horchd://train", (e) => cb(e.payload));
+}
+
+export async function onSetup(
+  cb: (payload: TrainEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<TrainEvent>("horchd://setup", (e) => cb(e.payload));
 }
 
 export async function onDetected(

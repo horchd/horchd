@@ -53,3 +53,13 @@ export interface TrainingWord {
 export type TrainEvent =
   | { kind: "log"; line: string }
   | { kind: "status"; payload: Record<string, unknown> };
+
+export interface TrainingEnvStatus {
+  uv_version: string | null;
+  python_env_dir: string;
+  python_path: string | null;
+  openwakeword_installed: boolean;
+  package_dir: string | null;
+  negatives_features_path: string;
+  negatives_present: boolean;
+}

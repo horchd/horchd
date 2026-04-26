@@ -51,6 +51,9 @@ pub fn run() {
             commands::delete_training_sample,
             commands::read_training_sample,
             commands::train_wakeword,
+            commands::training_env_status,
+            commands::setup_training_env,
+            commands::fetch_negatives,
         ])
         .run(tauri::generate_context!())
         .expect("running horchd-gui");

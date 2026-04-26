@@ -158,14 +158,16 @@ For a custom wakeword you have two options:
    `python/horchd_train` package, which augments the takes and trains an
    [openWakeWord](https://github.com/dscripka/openWakeWord) DNN
    classifier head against a precomputed negatives feature corpus, then
-   exports `<name>.onnx` and registers it with the daemon. One-time
-   setup:
+   exports `<name>.onnx` and registers it with the daemon.
 
-   ```bash
-   cd python && uv sync                   # creates .venv with openwakeword + torch + audiomentations
-   uv run horchd-fetch-negatives          # downloads the precomputed negatives feature file (~hundreds of MB)
-   export HORCHD_PYTHON=$(pwd)/.venv/bin/python
-   ```
+   The Train tab carries a setup card that handles the rest for you:
+   one click installs an isolated Python venv at
+   `~/.local/share/horchd/python-env/` (uv pulls Python + torch +
+   openwakeword + audiomentations into it), another click downloads the
+   precomputed negatives feature file. The only system-level
+   requirement is [uv](https://docs.astral.sh/uv/) (`curl -LsSf
+   https://astral.sh/uv/install.sh | sh`); everything else lives under
+   `~/.local/share/horchd/`.
 
 2. **External training** — produce an
    [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible

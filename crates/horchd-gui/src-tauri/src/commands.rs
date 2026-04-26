@@ -456,19 +456,302 @@ pub enum TrainEvent {
     Status { payload: serde_json::Value },
 }
 
-/// Spawn the `horchd_train` Python helper as a subprocess. Each line of
-/// stdout/stderr is forwarded to the frontend via `horchd://train` so
-/// the UI can render a live log + progress bar.
+#[derive(Debug, Clone, Serialize)]
+pub struct TrainingEnvStatus {
+    /// Output of `uv --version`, or null when uv is not on PATH.
+    pub uv_version: Option<String>,
+    /// Where we expect to install the venv.
+    pub python_env_dir: String,
+    /// Resolved python interpreter — present once the venv has been created.
+    pub python_path: Option<String>,
+    /// True iff `python -c "import openwakeword"` succeeds in that venv.
+    pub openwakeword_installed: bool,
+    /// Location of the bundled `python/` source tree we install from. None
+    /// means we couldn't find it (broken install).
+    pub package_dir: Option<String>,
+    /// Path to the precomputed negatives feature file required for training.
+    pub negatives_features_path: String,
+    /// True iff that file exists on disk.
+    pub negatives_present: bool,
+}
+
+fn canonical_python_env_dir() -> anyhow::Result<std::path::PathBuf> {
+    Ok(canonical_data_dir()?.join("python-env"))
+}
+
+fn canonical_python_path() -> anyhow::Result<std::path::PathBuf> {
+    Ok(canonical_python_env_dir()?.join("bin").join("python"))
+}
+
+fn canonical_negatives_path() -> anyhow::Result<std::path::PathBuf> {
+    Ok(canonical_data_dir()?
+        .join("negatives")
+        .join("openwakeword_features_ACAV100M_2000_hrs_16bit.npy"))
+}
+
+/// Locate the bundled `python/` source tree. Tries (in order):
+/// 1. `$HORCHD_TRAIN_PACKAGE_DIR`
+/// 2. `<repo-root>/python` derived from CARGO_MANIFEST_DIR (dev builds)
+/// 3. siblings of the running executable (released builds)
+fn find_train_package_dir() -> Option<std::path::PathBuf> {
+    if let Ok(env_dir) = std::env::var("HORCHD_TRAIN_PACKAGE_DIR") {
+        let p = std::path::PathBuf::from(env_dir);
+        if p.join("pyproject.toml").is_file() {
+            return Some(p);
+        }
+    }
+
+    if let Some(manifest) = option_env!("CARGO_MANIFEST_DIR") {
+        // crates/horchd-gui/src-tauri → ../../../python
+        let p = std::path::Path::new(manifest)
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("python");
+        if let Ok(canon) = p.canonicalize()
+            && canon.join("pyproject.toml").is_file()
+        {
+            return Some(canon);
+        }
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        let mut here = exe.parent()?.to_path_buf();
+        for _ in 0..6 {
+            let candidate = here.join("python");
+            if candidate.join("pyproject.toml").is_file() {
+                return Some(candidate);
+            }
+            let share = here.join("share").join("horchd").join("python");
+            if share.join("pyproject.toml").is_file() {
+                return Some(share);
+            }
+            if !here.pop() {
+                break;
+            }
+        }
+    }
+
+    None
+}
+
+fn find_uv() -> Option<String> {
+    use std::process::Command;
+    let candidates = ["uv"];
+    for name in candidates {
+        if let Ok(out) = Command::new(name).arg("--version").output()
+            && out.status.success()
+        {
+            return String::from_utf8(out.stdout)
+                .ok()
+                .map(|s| s.trim().to_string());
+        }
+    }
+    None
+}
+
+fn openwakeword_importable(python: &std::path::Path) -> bool {
+    use std::process::Command;
+    Command::new(python)
+        .args(["-c", "import openwakeword"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn training_env_status() -> Result<TrainingEnvStatus, String> {
+    let env_dir = canonical_python_env_dir().map_err(err)?;
+    let py = canonical_python_path().map_err(err)?;
+    let negatives = canonical_negatives_path().map_err(err)?;
+    let python_present = py.is_file();
+    Ok(TrainingEnvStatus {
+        uv_version: find_uv(),
+        python_env_dir: env_dir.to_string_lossy().into_owned(),
+        python_path: python_present.then(|| py.to_string_lossy().into_owned()),
+        openwakeword_installed: python_present && openwakeword_importable(&py),
+        package_dir: find_train_package_dir().map(|p| p.to_string_lossy().into_owned()),
+        negatives_features_path: negatives.to_string_lossy().into_owned(),
+        negatives_present: negatives.is_file(),
+    })
+}
+
+/// Bootstrap the isolated training venv via `uv`. Streams every line of
+/// uv's output as `horchd://setup` so the UI can show progress.
+#[tauri::command]
+pub async fn setup_training_env(app: AppHandle) -> Result<String, String> {
+    if find_uv().is_none() {
+        return Err(
+            "uv is not installed — get it from https://docs.astral.sh/uv/ (one-line install: `curl -LsSf https://astral.sh/uv/install.sh | sh`)"
+                .into(),
+        );
+    }
+    let pkg = find_train_package_dir()
+        .ok_or_else(|| "could not locate the bundled python/ helper directory".to_string())?;
+    let env_dir = canonical_python_env_dir().map_err(err)?;
+    if let Some(parent) = env_dir.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("creating {}: {e}", parent.display()))?;
+    }
+
+    emit_setup_status(&app, "create-venv", 0.0);
+    run_streamed(
+        &app,
+        "uv",
+        &[
+            "venv",
+            "--python",
+            "3.12",
+            env_dir.to_string_lossy().as_ref(),
+        ],
+        None,
+    )
+    .await?;
+
+    emit_setup_status(&app, "install", 0.5);
+    let pkg_str = pkg.to_string_lossy().into_owned();
+    let env_str = env_dir.to_string_lossy().into_owned();
+    run_streamed(
+        &app,
+        "uv",
+        &[
+            "pip",
+            "install",
+            "--python",
+            env_str.as_str(),
+            "-e",
+            pkg_str.as_str(),
+        ],
+        None,
+    )
+    .await?;
+
+    emit_setup_status(&app, "done", 1.0);
+    Ok(canonical_python_path()
+        .map_err(err)?
+        .to_string_lossy()
+        .into_owned())
+}
+
+/// Pull the precomputed negatives features file via the helper's
+/// `horchd-fetch-negatives` entry point. Streams to `horchd://setup`.
+#[tauri::command]
+pub async fn fetch_negatives(app: AppHandle) -> Result<String, String> {
+    let py = canonical_python_path().map_err(err)?;
+    if !py.is_file() {
+        return Err("training venv not set up yet — run setup first".into());
+    }
+    emit_setup_status(&app, "fetch", 0.0);
+    let py_str = py.to_string_lossy().into_owned();
+    run_streamed(
+        &app,
+        py_str.as_str(),
+        &["-m", "horchd_train.fetch"],
+        Some("setup"),
+    )
+    .await?;
+    emit_setup_status(&app, "done", 1.0);
+    Ok(canonical_negatives_path()
+        .map_err(err)?
+        .to_string_lossy()
+        .into_owned())
+}
+
+fn emit_setup_status(app: &AppHandle, stage: &str, progress: f64) {
+    let _ = app.emit(
+        "horchd://setup",
+        TrainEvent::Status {
+            payload: serde_json::json!({ "stage": stage, "progress": progress }),
+        },
+    );
+}
+
+/// Spawn `program` with `args`, streaming stdout + stderr line-by-line
+/// to `horchd://<channel>` (or `horchd://setup` by default). `##HORCHD
+/// {…}` lines become structured `Status` events; everything else is a
+/// raw `Log` line.
+async fn run_streamed(
+    app: &AppHandle,
+    program: &str,
+    args: &[&str],
+    channel: Option<&str>,
+) -> Result<(), String> {
+    use std::process::Stdio;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
+
+    let event = format!("horchd://{}", channel.unwrap_or("setup"));
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.stdin(Stdio::null());
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("spawning {program}: {e}"))?;
+
+    let stdout = child.stdout.take().ok_or_else(|| "no stdout".to_string())?;
+    let stderr = child.stderr.take().ok_or_else(|| "no stderr".to_string())?;
+
+    let evt_out = event.clone();
+    let evt_err = event.clone();
+    let app_out = app.clone();
+    let app_err = app.clone();
+
+    let out_task = tokio::spawn(async move {
+        let mut r = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = r.next_line().await {
+            forward_event_line(&app_out, &evt_out, &line);
+        }
+    });
+    let err_task = tokio::spawn(async move {
+        let mut r = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = r.next_line().await {
+            forward_event_line(&app_err, &evt_err, &line);
+        }
+    });
+
+    let status = child
+        .wait()
+        .await
+        .map_err(|e| format!("waiting on {program}: {e}"))?;
+    let _ = out_task.await;
+    let _ = err_task.await;
+
+    if !status.success() {
+        return Err(format!(
+            "{program} exited with code {}",
+            status.code().unwrap_or(-1)
+        ));
+    }
+    Ok(())
+}
+
+fn forward_event_line(app: &AppHandle, event: &str, line: &str) {
+    if let Some(rest) = line.strip_prefix("##HORCHD ")
+        && let Ok(payload) = serde_json::from_str::<serde_json::Value>(rest)
+    {
+        let _ = app.emit(event, TrainEvent::Status { payload });
+        return;
+    }
+    let _ = app.emit(
+        event,
+        TrainEvent::Log {
+            line: line.to_string(),
+        },
+    );
+}
+
+/// Spawn the `horchd_train` Python helper. Output streams to
+/// `horchd://train`; success returns the produced `.onnx` path.
 ///
-/// Resolves the python executable in this order:
-/// 1. `$HORCHD_PYTHON` if set (use this for a dedicated venv).
-/// 2. `python3` from `$PATH`.
-///
-/// Resolves the helper in this order:
-/// 1. `$HORCHD_TRAIN_SCRIPT` if set — runs `python <path>` directly.
-/// 2. The package itself: assumes the chosen python can `python -m
-///    horchd_train` (i.e. the user installed it via `uv sync` or `pip
-///    install -e python/`).
+/// Python resolution order:
+/// 1. `$HORCHD_PYTHON` (lets advanced users point at a custom venv).
+/// 2. The managed venv at `~/.local/share/horchd/python-env/bin/python`
+///    set up via `setup_training_env` from the GUI.
+/// 3. `python3` from `$PATH` as a last resort.
 #[tauri::command]
 pub async fn train_wakeword(
     app: AppHandle,
@@ -477,80 +760,34 @@ pub async fn train_wakeword(
     augment_per_recording: Option<u32>,
     steps: Option<u32>,
 ) -> Result<String, String> {
-    use std::process::Stdio;
-    use tokio::io::{AsyncBufReadExt, BufReader};
-    use tokio::process::Command;
-
     let name = sanitize_name(&name)?;
     let phrase = target_phrase.trim();
     if phrase.is_empty() {
         return Err("set the target phrase before training".into());
     }
 
-    let python = std::env::var("HORCHD_PYTHON").unwrap_or_else(|_| "python3".into());
-    let mut cmd = Command::new(&python);
+    let python = resolve_train_python()?;
+    let mut args: Vec<String> = Vec::new();
     if let Ok(script) = std::env::var("HORCHD_TRAIN_SCRIPT") {
-        cmd.arg(script);
+        args.push(script);
     } else {
-        cmd.args(["-m", "horchd_train"]);
+        args.push("-m".into());
+        args.push("horchd_train".into());
     }
-    cmd.arg("--name")
-        .arg(&name)
-        .arg("--target-phrase")
-        .arg(phrase);
+    args.push("--name".into());
+    args.push(name.clone());
+    args.push("--target-phrase".into());
+    args.push(phrase.into());
     if let Some(n) = augment_per_recording {
-        cmd.arg("--augment-per-recording").arg(n.to_string());
+        args.push("--augment-per-recording".into());
+        args.push(n.to_string());
     }
     if let Some(s) = steps {
-        cmd.arg("--steps").arg(s.to_string());
+        args.push("--steps".into());
+        args.push(s.to_string());
     }
-
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-    cmd.stdin(Stdio::null());
-
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("spawning {python}: {e} — install the helper with `uv sync --project python/` and ensure $HORCHD_PYTHON points at the venv"))?;
-
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "no stdout from training subprocess".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "no stderr from training subprocess".to_string())?;
-
-    let app_for_stdout = app.clone();
-    let app_for_stderr = app.clone();
-
-    let stdout_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            forward_train_line(&app_for_stdout, &line);
-        }
-    });
-    let stderr_task = tokio::spawn(async move {
-        let mut reader = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            forward_train_line(&app_for_stderr, &line);
-        }
-    });
-
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| format!("waiting on training subprocess: {e}"))?;
-    let _ = stdout_task.await;
-    let _ = stderr_task.await;
-
-    if !status.success() {
-        return Err(format!(
-            "training subprocess exited with code {}",
-            status.code().unwrap_or(-1)
-        ));
-    }
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_streamed(&app, &python, &arg_refs, Some("train")).await?;
 
     let onnx = canonical_models_dir()
         .map_err(err)?
@@ -558,17 +795,14 @@ pub async fn train_wakeword(
     Ok(onnx.to_string_lossy().into_owned())
 }
 
-fn forward_train_line(app: &AppHandle, line: &str) {
-    if let Some(rest) = line.strip_prefix("##HORCHD ")
-        && let Ok(payload) = serde_json::from_str::<serde_json::Value>(rest)
-    {
-        let _ = app.emit("horchd://train", TrainEvent::Status { payload });
-        return;
+fn resolve_train_python() -> Result<String, String> {
+    if let Ok(env) = std::env::var("HORCHD_PYTHON") {
+        return Ok(env);
     }
-    let _ = app.emit(
-        "horchd://train",
-        TrainEvent::Log {
-            line: line.to_string(),
-        },
-    );
+    if let Ok(managed) = canonical_python_path()
+        && managed.is_file()
+    {
+        return Ok(managed.to_string_lossy().into_owned());
+    }
+    Ok("python3".into())
 }
