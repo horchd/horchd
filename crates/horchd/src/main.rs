@@ -8,6 +8,7 @@ use horchd_core::Config;
 use tracing_subscriber::EnvFilter;
 
 mod audio;
+mod inference;
 mod service;
 
 const DBUS_NAME: &str = "xyz.horchd.Daemon";
@@ -65,11 +66,29 @@ async fn main() -> Result<()> {
         .with_context(|| format!("loading config from {}", cli.config.display()))?;
     tracing::info!(wakewords = config.wakewords.len(), "config loaded");
 
+    let preprocessor = inference::Preprocessor::new(
+        &config.engine.shared_models.melspectrogram,
+        &config.engine.shared_models.embedding,
+    )
+    .context("loading shared melspec + embedding models")?;
+    let classifiers = config
+        .wakewords
+        .iter()
+        .map(|w| inference::Classifier::load(w.name.clone(), &w.model))
+        .collect::<Result<Vec<_>>>()
+        .context("loading per-wakeword classifiers")?;
+    tracing::info!(
+        loaded = classifiers.len(),
+        names = ?classifiers.iter().map(|c| &c.name).collect::<Vec<_>>(),
+        "classifiers loaded"
+    );
+    let pipeline = inference::InferencePipeline::new(preprocessor, classifiers);
+
     let (audio_handle, frames) = audio::start(&config.engine.device, AUDIO_CHANNEL_CAPACITY)
         .context("starting audio capture")?;
     let stats = Arc::clone(&audio_handle.stats);
 
-    tokio::spawn(drain_frames(frames));
+    tokio::spawn(run_inference(frames, pipeline));
     tokio::spawn(log_stats(Arc::clone(&stats), STATS_LOG_INTERVAL));
 
     let daemon = service::Daemon::new(config, cli.config.clone(), stats);
@@ -90,10 +109,35 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Phase 3 placeholder: discard each frame. Phase 4 replaces this with
-/// the inference fan-out.
-async fn drain_frames(mut frames: tokio::sync::mpsc::Receiver<audio::Frame>) {
-    while frames.recv().await.is_some() {}
+/// Pull audio frames as they arrive, push each through the inference
+/// pipeline, log scores. Phase 5 will route fires through a broadcast
+/// channel into the D-Bus `Detected` signal emitter.
+async fn run_inference(
+    mut frames: tokio::sync::mpsc::Receiver<audio::Frame>,
+    mut pipeline: inference::InferencePipeline,
+) {
+    while let Some(frame) = frames.recv().await {
+        // Inference is CPU-bound; offload so we don't block the runtime.
+        let result = tokio::task::block_in_place(|| pipeline.process(&frame));
+        match result {
+            Ok(scores) if !scores.is_empty() => {
+                tracing::trace!(?scores, "scores");
+                if let Some((name, score)) = scores
+                    .iter()
+                    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                    .filter(|(_, s)| *s > 0.5)
+                {
+                    tracing::debug!(
+                        name,
+                        score,
+                        "candidate fire (threshold check lives in Phase 5)"
+                    );
+                }
+            }
+            Ok(_) => {}
+            Err(err) => tracing::error!(?err, "inference failed"),
+        }
+    }
     tracing::warn!("audio frame channel closed");
 }
 
