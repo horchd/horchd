@@ -1,0 +1,230 @@
+@import "tailwindcss";
+
+/* Brutalist scientific-instrument tokens. Kept as CSS variables AND
+   Tailwind theme tokens so we can use both Tailwind classes (`text-ink`,
+   `bg-paper`) and bare CSS where convenient. */
+@theme {
+  --color-ink: #0a0a0a;
+  --color-ink-soft: #2a2a2a;
+  --color-paper: #ece7dd;
+  --color-paper-2: #e1ddd1;
+  --color-paper-3: #d6d2c5;
+  --color-rule: #1a1a1a;
+  --color-rule-soft: #b9b3a4;
+  --color-accent: #c8311c;
+  --color-accent-dim: #8c2014;
+  --color-ok: #1f5b32;
+  --color-muted: #5a564f;
+
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Dark mode override of the same tokens. Tailwind v4 picks them up via
+   `@variant dark` automatically when prefers-color-scheme is dark. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-ink: #ece7dd;
+    --color-ink-soft: #c4bfb3;
+    --color-paper: #14130f;
+    --color-paper-2: #1c1b16;
+    --color-paper-3: #25231d;
+    --color-rule: #d6d2c5;
+    --color-rule-soft: #4a463d;
+    --color-accent: #ee5a45;
+    --color-accent-dim: #a13724;
+    --color-ok: #6cb27e;
+    --color-muted: #8a857a;
+  }
+}
+
+html,
+body {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: 0.005em;
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1,
+    "ss01" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 20% 0%, color-mix(in oklab, var(--color-paper) 92%, var(--color-paper-3)) 0%, transparent 60%),
+    radial-gradient(circle at 100% 100%, color-mix(in oklab, var(--color-paper) 92%, var(--color-accent) 6%) 0%, transparent 55%);
+  overflow-y: scroll;
+}
+
+/* Hairline utility — tailwind's `border` rounds; we want raw 1px. */
+.hair {
+  border: 1px solid var(--color-rule);
+}
+.hair-soft {
+  border: 1px solid var(--color-rule-soft);
+}
+.hair-b {
+  border-bottom: 1px solid var(--color-rule);
+}
+.hair-t {
+  border-top: 1px solid var(--color-rule);
+}
+
+/* Display number with tabular figures — used by the hero gauges. */
+.numeral {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variation-settings:
+    "opsz" 144,
+    "SOFT" 0;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 700;
+  font-variation-settings:
+    "opsz" 144,
+    "SOFT" 30;
+  letter-spacing: -0.02em;
+}
+
+.label-tracked {
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+/* Page-load stagger */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.stagger > * {
+  opacity: 0;
+  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 4px transparent;
+    opacity: 0.55;
+  }
+}
+
+@keyframes flash {
+  0% {
+    background: color-mix(in oklab, var(--color-accent) 22%, var(--color-paper));
+    border-color: var(--color-accent);
+  }
+  100% {
+    background: var(--color-paper);
+    border-color: var(--color-rule);
+  }
+}
+.flash {
+  animation: flash 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes enter {
+  from {
+    transform: translateX(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Custom range slider (lab-instrument hairline track + ink thumb). */
+input[type="range"].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: ew-resize;
+}
+input[type="range"].slider::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--color-rule);
+}
+input[type="range"].slider::-moz-range-track {
+  height: 1px;
+  background: var(--color-rule);
+}
+input[type="range"].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 14px;
+  background: var(--color-ink);
+  border: 0;
+  margin-top: -7px;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+input[type="range"].slider::-moz-range-thumb {
+  width: 12px;
+  height: 14px;
+  background: var(--color-ink);
+  border: 0;
+  border-radius: 0;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+input[type="range"].slider:hover::-webkit-slider-thumb,
+input[type="range"].slider:focus::-webkit-slider-thumb {
+  background: var(--color-accent);
+}
+input[type="range"].slider:hover::-moz-range-thumb,
+input[type="range"].slider:focus::-moz-range-thumb {
+  background: var(--color-accent);
+}
+
+/* Form field defaults */
+.field-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-rule);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-ink);
+}
+.field-input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}

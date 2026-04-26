@@ -15,6 +15,8 @@ use tracing_subscriber::EnvFilter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    apply_wayland_workarounds();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -41,4 +43,26 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("running horchd-gui");
+}
+
+/// Work around `Gdk-Message: Error 71 (Protocol error) dispatching to
+/// Wayland display` and similar webkit2gtk-on-Wayland breakage that
+/// shows up on NVIDIA, mixed-DPI, and several Hyprland/KDE setups.
+/// Both env vars are documented webkit2gtk knobs and are no-ops on
+/// systems that don't need them. Already-set values from the user's
+/// shell win — we only seed the defaults.
+fn apply_wayland_workarounds() {
+    let knobs = [
+        ("WEBKIT_DISABLE_DMABUF_RENDERER", "1"),
+        ("WEBKIT_DISABLE_COMPOSITING_MODE", "1"),
+    ];
+    // SAFETY: called exactly once before tracing and before any tokio /
+    // tauri thread is spawned, so no observer can be racing the env map.
+    unsafe {
+        for (k, v) in knobs {
+            if std::env::var_os(k).is_none() {
+                std::env::set_var(k, v);
+            }
+        }
+    }
 }

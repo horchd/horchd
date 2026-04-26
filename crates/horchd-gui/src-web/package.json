@@ -1,0 +1,27 @@
+{
+  "name": "horchd-gui-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 5173 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.11.0",
+    "@tauri-apps/api": "^2"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-static": "^3",
+    "@sveltejs/kit": "^2",
+    "@sveltejs/vite-plugin-svelte": "^5",
+    "@tailwindcss/vite": "^4",
+    "svelte": "^5",
+    "svelte-check": "^4",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vite": "^6"
+  }
+}
