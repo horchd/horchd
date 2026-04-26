@@ -44,6 +44,16 @@ pub trait Daemon {
     /// path-changed entries trigger I/O. The audio thread is preserved.
     fn reload(&self) -> zbus::Result<()>;
 
+    /// Sorted list of cpal input device names available on the default
+    /// host. Cheap — only enumerates, doesn't open streams.
+    fn list_input_devices(&self) -> zbus::Result<Vec<String>>;
+
+    /// Switch the cpal capture device live. Drops the existing stream,
+    /// starts a new one, restarts the inference task. Use `"default"`
+    /// to follow the host default. `persist=true` writes the choice
+    /// back to `[engine].device` in `config.toml`.
+    fn set_input_device(&self, name: &str, persist: bool) -> zbus::Result<()>;
+
     /// `(running, audio_fps, score_fps, mic_level)`.
     /// `mic_level` is the smoothed peak `|sample|` of the most recent
     /// cpal callback in `[0, 1]` — useful as a "is the mic alive?"

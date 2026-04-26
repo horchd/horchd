@@ -101,6 +101,20 @@ pub async fn remove_wakeword(name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn list_input_devices() -> Result<Vec<String>, String> {
+    let p = proxy().await.map_err(err)?;
+    p.list_input_devices().await.map_err(|e| err(e.into()))
+}
+
+#[tauri::command]
+pub async fn set_input_device(name: String, save: bool) -> Result<(), String> {
+    let p = proxy().await.map_err(err)?;
+    p.set_input_device(&name, save)
+        .await
+        .map_err(|e| err(e.into()))
+}
+
+#[tauri::command]
 pub async fn reload() -> Result<(), String> {
     let p = proxy().await.map_err(err)?;
     p.reload().await.map_err(|e| err(e.into()))

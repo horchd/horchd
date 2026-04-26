@@ -28,6 +28,15 @@ pub fn set_cooldown_ms(path: &Path, name: &str, ms: u32) -> Result<()> {
     })
 }
 
+pub fn set_engine_device(path: &Path, device: &str) -> Result<()> {
+    let mut doc = read_doc(path)?;
+    let engine = doc.get_mut("engine").and_then(Item::as_table_mut).ok_or_else(|| {
+        anyhow::anyhow!("config at {} has no [engine] table", path.display())
+    })?;
+    engine["device"] = edit_value(device);
+    write_doc(path, &doc)
+}
+
 pub fn add_wakeword(path: &Path, wake: &Wakeword) -> Result<()> {
     let mut doc = read_doc(path)?;
     let arr = wakeword_array_mut(&mut doc, path)?;

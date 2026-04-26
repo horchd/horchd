@@ -4,6 +4,10 @@
 
   let modelsDir = $state<string>("…");
   let copied = $state<string | undefined>(undefined);
+  let devices = $state<string[]>([]);
+  let selectedDevice = $state<string>("default");
+  let savePersist = $state<boolean>(true);
+  let switching = $state<boolean>(false);
 
   $effect(() => {
     void (async () => {
@@ -15,6 +19,17 @@
     })();
   });
 
+  $effect(() => {
+    void (async () => {
+      try {
+        const list = await dbus.listInputDevices();
+        devices = ["default", ...list.filter((d) => d !== "default")];
+      } catch {
+        devices = ["default"];
+      }
+    })();
+  });
+
   async function copy(text: string, label: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -22,6 +37,21 @@
       setTimeout(() => (copied = undefined), 1400);
     } catch {
       app.showToast("clipboard unavailable", true);
+    }
+  }
+
+  async function applyDevice() {
+    if (!selectedDevice || switching) return;
+    switching = true;
+    try {
+      await dbus.setInputDevice(selectedDevice, savePersist);
+      app.showToast(
+        `audio device → ${selectedDevice === "default" ? "host default" : selectedDevice}`,
+      );
+    } catch (e) {
+      app.showToast(`set device failed: ${e instanceof Error ? e.message : String(e)}`, true);
+    } finally {
+      switching = false;
     }
   }
 </script>
@@ -73,15 +103,26 @@
   <div class="group">
     <header class="group-head">
       <span class="label-tracked group-label">Audio input device</span>
-      <span class="soon">coming soon</span>
+      <span class="muted help">drops the cpal stream and restarts the inference task</span>
     </header>
-    <p class="group-body">
-      Switching the cpal input device live (without restarting the daemon)
-      needs daemon-side <code>ListInputDevices</code> + <code>SetInputDevice</code>
-      methods plus a graceful audio-thread restart. Tracked as Phase B of
-      the device-picker work — until then, edit
-      <code>[engine].device</code> in <code>config.toml</code> and run
-      <code>horchctl reload</code>.
+    <div class="device-row">
+      <select class="select" bind:value={selectedDevice} disabled={switching}>
+        {#each devices as dev (dev)}
+          <option value={dev}>{dev === "default" ? "(host default)" : dev}</option>
+        {/each}
+      </select>
+      <label class="persist-toggle">
+        <input type="checkbox" bind:checked={savePersist} />
+        <span>persist to <code>config.toml</code></span>
+      </label>
+      <button class="action-btn" onclick={applyDevice} disabled={switching}>
+        {switching ? "switching…" : "apply"}
+      </button>
+    </div>
+    <p class="group-body small">
+      cpal lists every PipeWire / PulseAudio / ALSA source the host knows
+      about. <code>(host default)</code> follows whatever PipeWire / Pulse
+      currently routes to.
     </p>
   </div>
 
@@ -134,14 +175,6 @@
     color: var(--color-accent);
     text-decoration: none;
     border-bottom: 1px solid currentColor;
-  }
-  .soon {
-    font-size: 9px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--color-accent);
-    border: 1px dashed var(--color-accent);
-    padding: 2px 8px;
   }
   .row {
     display: grid;
@@ -209,5 +242,52 @@
   .action-btn:hover {
     background: var(--color-ink);
     color: var(--color-paper);
+  }
+  .action-btn:disabled {
+    opacity: 0.5;
+    cursor: progress;
+  }
+
+  .device-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 0 12px;
+  }
+  .select {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    background: var(--color-paper-2);
+    border: 1px solid var(--color-rule-soft);
+    color: var(--color-ink);
+  }
+  .select:focus {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -1px;
+  }
+  .persist-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-muted);
+    cursor: pointer;
+  }
+  .persist-toggle code {
+    background: var(--color-paper-2);
+    padding: 1px 5px;
+    font-size: 10px;
+  }
+  .group-body.small {
+    font-size: 11px;
+    margin-top: 4px;
+  }
+  .help {
+    font-size: 10px;
+    text-transform: none;
+    letter-spacing: 0;
   }
 </style>

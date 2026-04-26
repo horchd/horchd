@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::Parser;
 use horchd_core::{Config, WakewordEvent};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing_subscriber::EnvFilter;
 use zbus::Connection;
 use zbus::object_server::SignalEmitter;
@@ -39,6 +39,20 @@ const SCORE_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Stats log cadence.
 const STATS_LOG_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Commands the D-Bus service handler can send back to `main` so audio
+/// device hot-swaps run on the thread that owns the (`!Send`) cpal
+/// `Stream`.
+pub enum AudioCmd {
+    List {
+        reply: oneshot::Sender<Result<Vec<String>>>,
+    },
+    SetDevice {
+        name: String,
+        persist: bool,
+        reply: oneshot::Sender<Result<()>>,
+    },
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -106,18 +120,21 @@ async fn main() -> Result<()> {
 
     let shared_state = state::DaemonState::new(config, cli.config.clone(), pipeline, detectors);
 
-    let (audio_handle, frames) =
-        audio::start("default", AUDIO_CHANNEL_CAPACITY).context("starting audio capture")?;
-    // The cpal `Stream` inside `audio_handle` is `!Send`; we must keep it
-    // alive on the main thread until shutdown. Re-bind via a name we
-    // don't drop before the shutdown signal.
-    let audio_stats = Arc::clone(&audio_handle.stats);
+    let audio_stats = Arc::new(audio::AudioStats::new());
+    let initial_device = {
+        let s = shared_state.lock().await;
+        s.config.engine.device.clone()
+    };
+    let (mut audio_handle, frames) =
+        audio::start(&initial_device, AUDIO_CHANNEL_CAPACITY, Arc::clone(&audio_stats))
+            .context("starting audio capture")?;
     let inference_stats = Arc::new(inference::InferenceStats::new());
 
     let (event_tx, _) = broadcast::channel::<WakewordEvent>(EVENT_BROADCAST_CAPACITY);
     let (score_tx, _) = broadcast::channel::<(String, f64)>(SCORE_BROADCAST_CAPACITY);
+    let (audio_cmd_tx, mut audio_cmd_rx) = mpsc::channel::<AudioCmd>(8);
 
-    tokio::spawn(run_inference(
+    let mut inference_handle = tokio::spawn(run_inference(
         frames,
         Arc::clone(&shared_state),
         event_tx.clone(),
@@ -134,6 +151,7 @@ async fn main() -> Result<()> {
         Arc::clone(&shared_state),
         Arc::clone(&audio_stats),
         Arc::clone(&inference_stats),
+        audio_cmd_tx.clone(),
     );
     let conn = zbus::connection::Builder::session()?
         .name(DBUS_NAME)?
@@ -150,9 +168,78 @@ async fn main() -> Result<()> {
     tokio::spawn(emit_signals(conn.clone(), event_tx.subscribe()));
     tokio::spawn(emit_score_snapshots(conn.clone(), score_tx.subscribe()));
 
-    shutdown_signal().await;
-    drop(audio_handle); // explicit: stops the cpal stream
+    loop {
+        tokio::select! {
+            biased;
+            _ = shutdown_signal() => break,
+            maybe_cmd = audio_cmd_rx.recv() => {
+                let Some(cmd) = maybe_cmd else { continue; };
+                match cmd {
+                    AudioCmd::List { reply } => {
+                        let _ = reply.send(audio::list_input_device_names());
+                    }
+                    AudioCmd::SetDevice { name, persist, reply } => {
+                        let res = swap_device(
+                            &name,
+                            persist,
+                            &mut audio_handle,
+                            &mut inference_handle,
+                            &shared_state,
+                            &audio_stats,
+                            &inference_stats,
+                            &event_tx,
+                            &score_tx,
+                        )
+                        .await;
+                        let _ = reply.send(res);
+                    }
+                }
+            }
+        }
+    }
+    drop(audio_handle);
     tracing::info!("shutdown");
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn swap_device(
+    name: &str,
+    persist: bool,
+    audio_handle: &mut audio::AudioHandle,
+    inference_handle: &mut tokio::task::JoinHandle<()>,
+    shared_state: &state::SharedState,
+    audio_stats: &Arc<audio::AudioStats>,
+    inference_stats: &Arc<inference::InferenceStats>,
+    event_tx: &broadcast::Sender<WakewordEvent>,
+    score_tx: &broadcast::Sender<(String, f64)>,
+) -> Result<()> {
+    tracing::info!(name, "switching audio input device");
+    let (new_handle, frames) = audio::start(name, AUDIO_CHANNEL_CAPACITY, Arc::clone(audio_stats))
+        .with_context(|| format!("opening audio device {name:?}"))?;
+
+    inference_handle.abort();
+    *audio_handle = new_handle; // drops old; cpal stream stops
+    *inference_handle = tokio::spawn(run_inference(
+        frames,
+        Arc::clone(shared_state),
+        event_tx.clone(),
+        score_tx.clone(),
+        Arc::clone(inference_stats),
+    ));
+
+    {
+        let mut s = shared_state.lock().await;
+        s.config.engine.device = name.to_owned();
+    }
+    if persist {
+        let path = {
+            let s = shared_state.lock().await;
+            s.config_path.clone()
+        };
+        persist::set_engine_device(&path, name)
+            .with_context(|| format!("persisting device {name:?} to {}", path.display()))?;
+    }
     Ok(())
 }
 

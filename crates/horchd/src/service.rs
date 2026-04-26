@@ -9,9 +9,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use horchd_core::{Config, Wakeword, WakewordSnapshot};
+use tokio::sync::{mpsc, oneshot};
 use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
+use crate::AudioCmd;
 use crate::audio::AudioStats;
 use crate::detector::Detector;
 use crate::inference::{Classifier, InferenceStats};
@@ -22,6 +24,7 @@ pub struct Daemon {
     state: SharedState,
     audio_stats: Arc<AudioStats>,
     inference_stats: Arc<InferenceStats>,
+    audio_cmd_tx: mpsc::Sender<AudioCmd>,
 }
 
 impl Daemon {
@@ -29,11 +32,13 @@ impl Daemon {
         state: SharedState,
         audio_stats: Arc<AudioStats>,
         inference_stats: Arc<InferenceStats>,
+        audio_cmd_tx: mpsc::Sender<AudioCmd>,
     ) -> Self {
         Self {
             state,
             audio_stats,
             inference_stats,
+            audio_cmd_tx,
         }
     }
 }
@@ -206,6 +211,44 @@ impl Daemon {
         }
         tracing::info!(name, cooldown_ms = ms, persist_to_disk, "cooldown updated");
         Ok(())
+    }
+
+    /// Sorted list of cpal input device names available on the default
+    /// host. Cheap — only enumerates, does not open any streams.
+    async fn list_input_devices(&self) -> zbus::fdo::Result<Vec<String>> {
+        let (tx, rx) = oneshot::channel();
+        self.audio_cmd_tx
+            .send(AudioCmd::List { reply: tx })
+            .await
+            .map_err(|_| failed("audio command channel closed"))?;
+        let res = rx
+            .await
+            .map_err(|_| failed("audio task dropped reply channel"))?;
+        res.map_err(|e| failed(format!("{e:#}")))
+    }
+
+    /// Hot-swap the cpal capture device. Drops the running stream,
+    /// starts a new one, restarts the inference task. `"default"`
+    /// follows the host default. `persist=true` writes the choice back
+    /// to `[engine].device` in `config.toml`.
+    async fn set_input_device(
+        &self,
+        name: &str,
+        persist_to_disk: bool,
+    ) -> zbus::fdo::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.audio_cmd_tx
+            .send(AudioCmd::SetDevice {
+                name: name.to_owned(),
+                persist: persist_to_disk,
+                reply: tx,
+            })
+            .await
+            .map_err(|_| failed("audio command channel closed"))?;
+        let res = rx
+            .await
+            .map_err(|_| failed("audio task dropped reply channel"))?;
+        res.map_err(|e| failed(format!("{e:#}")))
     }
 
     /// Re-read the config file from disk and reconcile in-memory state.

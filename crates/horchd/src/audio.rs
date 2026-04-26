@@ -40,7 +40,7 @@ pub struct AudioStats {
 }
 
 impl AudioStats {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             started_at: Instant::now(),
             frames_emitted: AtomicU64::new(0),
@@ -91,17 +91,45 @@ impl AudioStats {
 /// tokio runtime's `block_on` (the main thread under `#[tokio::main]`).
 /// Drop it to stop the audio stream.
 pub struct AudioHandle {
-    pub stats: Arc<AudioStats>,
+    /// Read-only label of the device cpal actually opened (matches what
+    /// `default_input_device` / `pick_device` resolved to). Used for
+    /// logging + future "what's the active device" UI readouts.
+    #[allow(dead_code)]
+    pub device_label: String,
     _stream: Stream,
+}
+
+/// Enumerate human-readable input device names that actually expose at
+/// least one usable input config. Cheap-ish — opens devices to ask for
+/// configs, but doesn't start any streams. Filtering by config presence
+/// drops cpal/ALSA stubs (e.g. output-only entries that show up in the
+/// raw `input_devices()` iterator on Linux but aren't real captures).
+pub fn list_input_device_names() -> Result<Vec<String>> {
+    let host = cpal::default_host();
+    let mut names: Vec<String> = host
+        .input_devices()
+        .context("listing input devices")?
+        .filter(|d| {
+            d.supported_input_configs()
+                .map(|mut it| it.next().is_some())
+                .unwrap_or(false)
+        })
+        .filter_map(|d| d.description().ok().map(|desc| desc.name().to_owned()))
+        .collect();
+    names.sort();
+    names.dedup();
+    Ok(names)
 }
 
 /// Open `device_name` (`"default"` for the host default), force mono +
 /// 16 kHz via downmix + integer decimation, and start streaming frames.
-/// Returns the !Send handle separately from the Send receiver so the
-/// receiver can be moved into a tokio task.
+/// The caller passes the `AudioStats` Arc so counters survive
+/// device hot-swaps. Returns the !Send handle separately from the Send
+/// receiver so the receiver can be moved into a tokio task.
 pub fn start(
     device_name: &str,
     channel_capacity: usize,
+    stats: Arc<AudioStats>,
 ) -> Result<(AudioHandle, mpsc::Receiver<Frame>)> {
     let host = cpal::default_host();
     let device = pick_device(&host, device_name)?;
@@ -116,7 +144,6 @@ pub fn start(
     let stream_cfg = chosen.config();
 
     let (tx, rx) = mpsc::channel::<Frame>(channel_capacity);
-    let stats = Arc::new(AudioStats::new());
     let state = CallbackState::new(in_channels, decimation);
 
     let stream = build_stream(
@@ -125,7 +152,7 @@ pub fn start(
         sample_format,
         state,
         tx,
-        Arc::clone(&stats),
+        stats,
     )?;
     stream.play().context("starting cpal stream")?;
 
@@ -140,7 +167,7 @@ pub fn start(
 
     Ok((
         AudioHandle {
-            stats,
+            device_label,
             _stream: stream,
         },
         rx,

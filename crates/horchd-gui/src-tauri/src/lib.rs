@@ -42,6 +42,8 @@ pub fn run() {
             commands::reload,
             commands::import_wakeword,
             commands::models_dir,
+            commands::list_input_devices,
+            commands::set_input_device,
         ])
         .run(tauri::generate_context!())
         .expect("running horchd-gui");
