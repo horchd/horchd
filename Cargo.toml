@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = ["crates/horchctl", "crates/horchd", "crates/horchd-core"]
+# Future: "crates/horchd-gui" (Tauri tray + control panel)
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["spitzli"]
+repository = "https://github.com/horchd/horchd"
+homepage = "https://horchd.xyz"
