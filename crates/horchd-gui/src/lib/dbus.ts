@@ -11,6 +11,7 @@ import type {
   DetectedPayload,
   SampleKind,
   ScorePayload,
+  TrainEvent,
   TrainingSample,
   TrainingWord,
   WakewordRow,
@@ -37,25 +38,49 @@ export const dbus = {
   setInputDevice: (name: string, save: boolean) =>
     invoke<void>("set_input_device", { name, save }),
   trainingDir: () => invoke<string>("training_dir"),
+  /** Persist int16-PCM mono samples as a real .wav under the training dir. */
   saveTrainingSample: (
     name: string,
     kind: SampleKind,
-    mime: string,
-    data: Uint8Array,
+    sampleRate: number,
+    samples: Int16Array,
   ) =>
     invoke<TrainingSample>("save_training_sample", {
       name,
       kind,
-      mime,
-      data: Array.from(data),
+      sampleRate,
+      samples: Array.from(samples),
     }),
+  saveWordMeta: (name: string, targetPhrase: string) =>
+    invoke<void>("save_word_meta", { name, targetPhrase }),
   listTrainingSamples: (name: string) =>
     invoke<TrainingSample[]>("list_training_samples", { name }),
   listTrainingWords: () => invoke<TrainingWord[]>("list_training_words"),
   deleteTrainingSample: (path: string) =>
     invoke<void>("delete_training_sample", { path }),
-  trainWakeword: (name: string) => invoke<string>("train_wakeword", { name }),
+  /** Returns raw WAV bytes; wrap in `new Blob([bytes], { type: 'audio/wav' })`. */
+  readTrainingSample: (path: string) =>
+    invoke<number[]>("read_training_sample", { path }).then(
+      (arr) => new Uint8Array(arr),
+    ),
+  trainWakeword: (
+    name: string,
+    targetPhrase: string,
+    opts?: { augmentPerRecording?: number; steps?: number },
+  ) =>
+    invoke<string>("train_wakeword", {
+      name,
+      targetPhrase,
+      augmentPerRecording: opts?.augmentPerRecording,
+      steps: opts?.steps,
+    }),
 };
+
+export async function onTrain(
+  cb: (payload: TrainEvent) => void,
+): Promise<UnlistenFn> {
+  return listen<TrainEvent>("horchd://train", (e) => cb(e.payload));
+}
 
 export async function onDetected(
   cb: (payload: DetectedPayload) => void,

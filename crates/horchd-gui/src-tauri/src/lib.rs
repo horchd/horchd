@@ -45,9 +45,11 @@ pub fn run() {
             commands::set_input_device,
             commands::training_dir,
             commands::save_training_sample,
+            commands::save_word_meta,
             commands::list_training_samples,
             commands::list_training_words,
             commands::delete_training_sample,
+            commands::read_training_sample,
             commands::train_wakeword,
         ])
         .run(tauri::generate_context!())

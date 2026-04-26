@@ -39,10 +39,17 @@ export interface TrainingSample {
   path: string;
   ts_ms: number;
   size: number;
+  duration_ms: number;
+  sample_rate: number;
 }
 
 export interface TrainingWord {
   name: string;
   positive: number;
   negative: number;
+  target_phrase: string | null;
 }
+
+export type TrainEvent =
+  | { kind: "log"; line: string }
+  | { kind: "status"; payload: Record<string, unknown> };

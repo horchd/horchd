@@ -151,10 +151,27 @@ horchctl status
 horchctl monitor      # speak "hey jarvis"
 ```
 
-For a custom wakeword, train an [openWakeWord](https://github.com/dscripka/openWakeWord)
-classifier (input shape `(1, 16, 96)`, output `(1, 1)`), drop the resulting
-`<name>.onnx` into `~/.local/share/horchd/models/`, and
-`horchctl add <name> --model …`.
+For a custom wakeword you have two options:
+
+1. **In-app (Train tab in `horchd-gui`)** — record positive + negative
+   takes through the system mic; the GUI subprocesses the bundled
+   `python/horchd_train` package, which augments the takes and trains an
+   [openWakeWord](https://github.com/dscripka/openWakeWord) DNN
+   classifier head against a precomputed negatives feature corpus, then
+   exports `<name>.onnx` and registers it with the daemon. One-time
+   setup:
+
+   ```bash
+   cd python && uv sync                   # creates .venv with openwakeword + torch + audiomentations
+   uv run horchd-fetch-negatives          # downloads the precomputed negatives feature file (~hundreds of MB)
+   export HORCHD_PYTHON=$(pwd)/.venv/bin/python
+   ```
+
+2. **External training** — produce an
+   [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible
+   classifier (input `(1, 16, 96)`, output `(1, 1)`) yourself, drop the
+   `.onnx` into `~/.local/share/horchd/models/`, and
+   `horchctl add <name> --model …`.
 
 ## horchctl
 

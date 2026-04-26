@@ -1,0 +1,28 @@
+[project]
+name = "horchd-train"
+version = "0.1.0"
+description = "openWakeWord training subprocess invoked by horchd-gui"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "openwakeword>=0.6",
+    "audiomentations>=0.36",
+    "soundfile>=0.12",
+    "librosa>=0.10",
+    "numpy>=1.26",
+    "torch>=2.2",
+    "scikit-learn>=1.4",
+    "speechbrain>=0.5",
+    "tqdm",
+    "requests",
+]
+
+[project.scripts]
+horchd-train = "horchd_train.cli:main"
+horchd-fetch-negatives = "horchd_train.fetch:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["horchd_train"]
