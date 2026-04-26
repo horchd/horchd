@@ -146,14 +146,7 @@ pub fn start(
     let (tx, rx) = mpsc::channel::<Frame>(channel_capacity);
     let state = CallbackState::new(in_channels, decimation);
 
-    let stream = build_stream(
-        &device,
-        &stream_cfg,
-        sample_format,
-        state,
-        tx,
-        stats,
-    )?;
+    let stream = build_stream(&device, &stream_cfg, sample_format, state, tx, stats)?;
     stream.play().context("starting cpal stream")?;
 
     tracing::info!(

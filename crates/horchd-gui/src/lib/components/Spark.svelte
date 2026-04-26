@@ -18,7 +18,7 @@
 <div class="mt-3.5 flex items-end gap-[2px] h-7 border-b border-rule-soft">
   {#each bars as bar, i (i)}
     <span
-      class="flex-1 min-w-[2px] transition-[height,background] duration-300"
+      class="flex-1 min-w-[2px] transition-all duration-300"
       class:bg-ink-soft={!bar.peak}
       class:bg-accent={bar.peak}
       style:height={bar.h + "px"}

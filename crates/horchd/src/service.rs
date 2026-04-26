@@ -231,11 +231,7 @@ impl Daemon {
     /// starts a new one, restarts the inference task. `"default"`
     /// follows the host default. `persist=true` writes the choice back
     /// to `[engine].device` in `config.toml`.
-    async fn set_input_device(
-        &self,
-        name: &str,
-        persist_to_disk: bool,
-    ) -> zbus::fdo::Result<()> {
+    async fn set_input_device(&self, name: &str, persist_to_disk: bool) -> zbus::fdo::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.audio_cmd_tx
             .send(AudioCmd::SetDevice {

@@ -31,3 +31,18 @@ export interface FireRecord {
   score: number;
   ts_ms: number;
 }
+
+export type SampleKind = "positive" | "negative";
+
+export interface TrainingSample {
+  kind: SampleKind;
+  path: string;
+  ts_ms: number;
+  size: number;
+}
+
+export interface TrainingWord {
+  name: string;
+  positive: number;
+  negative: number;
+}

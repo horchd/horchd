@@ -28,11 +28,11 @@ embedding      = "/usr/local/share/horchd/embedding_model.onnx"
 # Field defaults: threshold = 0.5, cooldown_ms = 1500, enabled = true.
 # `~` and `$VAR` paths are expanded.
 #
-# Example: a Lyna-trained model
+# Example: a custom-trained openWakeWord-compatible model
 #
 # [[wakeword]]
-# name = "lyna"
-# model = "~/.local/share/horchd/models/lyna.onnx"
+# name = "wetter"
+# model = "~/.local/share/horchd/models/wetter.onnx"
 # threshold = 0.5
 # cooldown_ms = 1500
 # enabled = true

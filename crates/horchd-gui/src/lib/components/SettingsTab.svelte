@@ -1,9 +1,6 @@
 <script lang="ts">
-  import { Sparkles } from "@lucide/svelte";
-
   import { app } from "$lib/app.svelte";
   import { dbus } from "$lib/dbus";
-  import { openLyna } from "$lib/lyna";
 
   let modelsDir = $state<string>("…");
   let copied = $state<string | undefined>(undefined);
@@ -40,19 +37,6 @@
       setTimeout(() => (copied = undefined), 1400);
     } catch {
       app.showToast("clipboard unavailable", true);
-    }
-  }
-
-  async function trainInLyna() {
-    try {
-      const where = await openLyna();
-      app.showToast(
-        where === "local"
-          ? "opened Lyna at localhost:5173"
-          : "Lyna isn't running locally — opened install instructions",
-      );
-    } catch (e) {
-      app.showToast(`couldn't open Lyna: ${e instanceof Error ? e.message : String(e)}`, true);
     }
   }
 
@@ -159,29 +143,6 @@
       about. <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">(host default)</code>
       follows whatever PipeWire / Pulse currently routes to.
     </p>
-  </div>
-
-  <div class="mb-8 pb-6 border-b border-rule-soft">
-    <header class="flex items-baseline justify-between mb-2.5">
-      <span class="label-tracked text-ink font-bold">Train your own wakeword</span>
-    </header>
-    <p class="m-0 text-[12px] leading-[1.6] text-muted">
-      horchd is intentionally trainerless — it loads any
-      openWakeWord-compatible <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">.onnx</code> classifier. Use
-      <strong>Lyna</strong>, the companion trainer/studio, to record
-      samples, pick TTS voices for synthetic data, run training, and
-      export a model. Drop the resulting <code class="font-mono bg-paper-2 px-1.5 py-px text-[11px]">.onnx</code> back into
-      <em>Add → Import</em>.
-    </p>
-    <div class="flex items-center gap-3.5 mt-3">
-      <button
-        class="inline-flex items-center gap-1.5 font-mono font-semibold text-[10px] tracking-[0.2em] uppercase px-2.5 py-1 border border-ink bg-ink text-paper cursor-pointer transition-colors hover:bg-accent hover:border-accent"
-        onclick={trainInLyna}
-      >
-        <Sparkles size="13" /> Open Lyna
-      </button>
-      <span class="text-muted text-[10px]">probes <code class="font-mono bg-paper-2 px-1.5 py-px text-[10px]">localhost:5173</code> · falls back to GitHub</span>
-    </div>
   </div>
 
   <div>

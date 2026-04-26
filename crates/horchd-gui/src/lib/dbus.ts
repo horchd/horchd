@@ -6,7 +6,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-import type { DaemonStatus, DetectedPayload, ScorePayload, WakewordRow } from "./types";
+import type {
+  DaemonStatus,
+  DetectedPayload,
+  SampleKind,
+  ScorePayload,
+  TrainingSample,
+  TrainingWord,
+  WakewordRow,
+} from "./types";
 
 export const dbus = {
   status: () => invoke<DaemonStatus>("get_status"),
@@ -28,6 +36,25 @@ export const dbus = {
   listInputDevices: () => invoke<string[]>("list_input_devices"),
   setInputDevice: (name: string, save: boolean) =>
     invoke<void>("set_input_device", { name, save }),
+  trainingDir: () => invoke<string>("training_dir"),
+  saveTrainingSample: (
+    name: string,
+    kind: SampleKind,
+    mime: string,
+    data: Uint8Array,
+  ) =>
+    invoke<TrainingSample>("save_training_sample", {
+      name,
+      kind,
+      mime,
+      data: Array.from(data),
+    }),
+  listTrainingSamples: (name: string) =>
+    invoke<TrainingSample[]>("list_training_samples", { name }),
+  listTrainingWords: () => invoke<TrainingWord[]>("list_training_words"),
+  deleteTrainingSample: (path: string) =>
+    invoke<void>("delete_training_sample", { path }),
+  trainWakeword: (name: string) => invoke<string>("train_wakeword", { name }),
 };
 
 export async function onDetected(

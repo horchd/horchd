@@ -10,10 +10,13 @@
   import TabBar from "$lib/components/TabBar.svelte";
   import Ticker from "$lib/components/Ticker.svelte";
   import Toast from "$lib/components/Toast.svelte";
+  import TrainTab from "$lib/components/TrainTab.svelte";
   import { app } from "$lib/app.svelte";
 
+  type Tab = "wakes" | "train" | "settings";
+
   let addOpen = $state(false);
-  let activeTab = $state<"wakes" | "settings">("wakes");
+  let activeTab = $state<Tab>("wakes");
   let filter = $state("");
 
   $effect(() => {
@@ -71,10 +74,11 @@
     <TabBar
       tabs={[
         { id: "wakes", label: "Wakewords", badge: app.wakes.length },
+        { id: "train", label: "Train" },
         { id: "settings", label: "Settings" },
       ]}
       active={activeTab}
-      onSelect={(id) => (activeTab = id as "wakes" | "settings")}
+      onSelect={(id) => (activeTab = id as Tab)}
     />
 
     {#if activeTab === "wakes"}
@@ -139,6 +143,8 @@
 
         <Ticker />
       </section>
+    {:else if activeTab === "train"}
+      <TrainTab />
     {:else}
       <SettingsTab />
     {/if}

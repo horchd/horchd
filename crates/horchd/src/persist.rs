@@ -30,9 +30,10 @@ pub fn set_cooldown_ms(path: &Path, name: &str, ms: u32) -> Result<()> {
 
 pub fn set_engine_device(path: &Path, device: &str) -> Result<()> {
     let mut doc = read_doc(path)?;
-    let engine = doc.get_mut("engine").and_then(Item::as_table_mut).ok_or_else(|| {
-        anyhow::anyhow!("config at {} has no [engine] table", path.display())
-    })?;
+    let engine = doc
+        .get_mut("engine")
+        .and_then(Item::as_table_mut)
+        .ok_or_else(|| anyhow::anyhow!("config at {} has no [engine] table", path.display()))?;
     engine["device"] = edit_value(device);
     write_doc(path, &doc)
 }
@@ -160,10 +161,10 @@ sample_rate = 16000
 melspectrogram = "/m.onnx"
 embedding = "/e.onnx"
 
-# Lyna trained this one
+# a custom wakeword
 [[wakeword]]
-name = "lyna"
-model = "/lyna.onnx"
+name = "alexa"
+model = "/alexa.onnx"
 threshold = 0.45
 cooldown_ms = 1500
 
@@ -176,10 +177,10 @@ threshold = 0.7
     #[test]
     fn set_threshold_preserves_comments_and_formatting() {
         let path = write_tmp("threshold", SAMPLE);
-        set_threshold(&path, "lyna", 0.55).unwrap();
+        set_threshold(&path, "alexa", 0.55).unwrap();
         let after = fs::read_to_string(&path).unwrap();
         assert!(after.contains("# top-of-file comment"));
-        assert!(after.contains("# Lyna trained this one"));
+        assert!(after.contains("# a custom wakeword"));
         assert!(after.contains("# mic device"));
         assert!(after.contains("threshold = 0.55"));
         assert!(after.contains("name = \"jarvis\""));
@@ -221,7 +222,7 @@ threshold = 0.7
         let err = add_wakeword(
             &path,
             &Wakeword {
-                name: "lyna".into(),
+                name: "alexa".into(),
                 model: Path::new("/x.onnx").to_path_buf(),
                 threshold: 0.5,
                 cooldown_ms: 1500,
@@ -239,7 +240,7 @@ threshold = 0.7
         remove_wakeword(&path, "jarvis").unwrap();
         let after = fs::read_to_string(&path).unwrap();
         assert!(!after.contains("jarvis"));
-        assert!(after.contains("lyna"));
+        assert!(after.contains("alexa"));
         fs::remove_file(&path).ok();
     }
 }

@@ -158,8 +158,8 @@ melspectrogram = "/usr/local/share/horchd/melspectrogram.onnx"
 embedding = "/usr/local/share/horchd/embedding_model.onnx"
 
 [[wakeword]]
-name = "lyna"
-model = "/home/user/.local/share/horchd/models/lyna.onnx"
+name = "alexa"
+model = "/home/user/.local/share/horchd/models/alexa.onnx"
 threshold = 0.45
 cooldown_ms = 1200
 enabled = true
@@ -177,11 +177,11 @@ model = "/home/user/.local/share/horchd/models/jarvis.onnx"
         assert_eq!(cfg.engine.log_level, "debug");
         assert_eq!(cfg.wakewords.len(), 2);
 
-        let lyna = &cfg.wakewords[0];
-        assert_eq!(lyna.name, "lyna");
-        assert!((lyna.threshold - 0.45).abs() < f64::EPSILON);
-        assert_eq!(lyna.cooldown_ms, 1200);
-        assert!(lyna.enabled);
+        let alexa = &cfg.wakewords[0];
+        assert_eq!(alexa.name, "alexa");
+        assert!((alexa.threshold - 0.45).abs() < f64::EPSILON);
+        assert_eq!(alexa.cooldown_ms, 1200);
+        assert!(alexa.enabled);
 
         let jarvis = &cfg.wakewords[1];
         assert!((jarvis.threshold - Wakeword::DEFAULT_THRESHOLD).abs() < f64::EPSILON);
@@ -201,9 +201,10 @@ model = "/home/user/.local/share/horchd/models/jarvis.onnx"
 
     #[test]
     fn rejects_duplicate_wakeword_names() {
-        let extra = format!("{SAMPLE}\n[[wakeword]]\nname = \"lyna\"\nmodel = \"/tmp/dup.onnx\"\n");
+        let extra =
+            format!("{SAMPLE}\n[[wakeword]]\nname = \"alexa\"\nmodel = \"/tmp/dup.onnx\"\n");
         let err = extra.parse::<Config>().unwrap_err();
-        assert!(matches!(err, Error::DuplicateWakeword(name) if name == "lyna"));
+        assert!(matches!(err, Error::DuplicateWakeword(name) if name == "alexa"));
     }
 
     #[test]

@@ -19,9 +19,9 @@ without re-implementing audio capture or inference.
 
 It's a drop-in replacement for the Python
 [openwakeword](https://github.com/dscripka/openWakeWord) runtime when
-you want a native daemon instead of a Python process, and a companion
-to [Lyna](https://github.com/horchd/lyna) which trains the `.onnx`
-classifiers `horchd` loads.
+you want a native daemon instead of a Python process, and loads any
+[openWakeWord](https://github.com/dscripka/openWakeWord)-compatible
+`.onnx` classifier (1, 16, 96) → (1, 1).
 
 ---
 
@@ -33,8 +33,9 @@ classifiers `horchd` loads.
 - **D-Bus first** — no HTTP listener, no custom socket, no cloud
 - **systemd user unit** — no root, no system-bus policy file
 - **Hot-reload** — edit the TOML, `horchctl reload`, never drops the audio thread
-- **Trainer-agnostic** — bring `.onnx` from [Lyna](https://github.com/horchd/lyna) or any
-  [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible trainer
+- **Trainer-agnostic** — bring any
+  [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible
+  `.onnx` classifier; `horchctl import-pretrained` pulls the upstream catalogue
 - **Future**: dual-engine support for [`micro-wake-word`](https://github.com/OHF-Voice/micro-wake-word) (the engine ESPHome / Home Assistant Voice uses) — see [roadmap](#roadmap)
 
 ## How it works
@@ -57,7 +58,7 @@ sliding window of last 16 embeddings  (≈1.28 s receptive field)
   ▼  fan-out
 ┌─────┬──────┬──────┬─────┐
 ▼     ▼      ▼      ▼     ▼
-lyna  jarvis wetter …    per-wakeword .onnx classifier  →  score in [0,1]
+jarvis wetter alexa …    per-wakeword .onnx classifier  →  score in [0,1]
   │
   ▼  rising-edge detector + per-wake cooldown
 xyz.horchd.Daemon1.Detected(name, score, timestamp_us)
@@ -150,9 +151,10 @@ horchctl status
 horchctl monitor      # speak "hey jarvis"
 ```
 
-For a custom wakeword, train one in [Lyna](https://github.com/horchd/lyna),
-drop the resulting `<name>.onnx` into `~/.local/share/horchd/models/`,
-and `horchctl add <name> --model …`.
+For a custom wakeword, train an [openWakeWord](https://github.com/dscripka/openWakeWord)
+classifier (input shape `(1, 16, 96)`, output `(1, 1)`), drop the resulting
+`<name>.onnx` into `~/.local/share/horchd/models/`, and
+`horchctl add <name> --model …`.
 
 ## horchctl
 
@@ -161,11 +163,11 @@ horchctl status                                   # daemon health + loaded wakew
 horchctl list                                     # tabular view
 horchctl monitor                                  # tail Detected signals live
 
-horchctl threshold lyna 0.45                      # transient (resets on restart)
-horchctl threshold lyna 0.45 --save               # persist to config.toml (preserves comments)
-horchctl cooldown  lyna 1200 --save
-horchctl enable    lyna --save
-horchctl disable   lyna --save
+horchctl threshold jarvis 0.45                    # transient (resets on restart)
+horchctl threshold jarvis 0.45 --save             # persist to config.toml (preserves comments)
+horchctl cooldown  jarvis 1200 --save
+horchctl enable    jarvis --save
+horchctl disable   jarvis --save
 
 horchctl add wetter --model ~/.local/share/horchd/models/wetter.onnx --threshold 0.55
 horchctl remove wetter            # keeps the .onnx on disk
@@ -271,8 +273,8 @@ melspectrogram = "/usr/local/share/horchd/melspectrogram.onnx"
 embedding      = "/usr/local/share/horchd/embedding_model.onnx"
 
 [[wakeword]]
-name = "lyna"                # appears in the D-Bus signal
-model = "~/.local/share/horchd/models/lyna.onnx"
+name = "jarvis"              # appears in the D-Bus signal
+model = "~/.local/share/horchd/models/jarvis.onnx"
 threshold = 0.5              # default
 cooldown_ms = 1500           # default
 enabled = true               # default
@@ -348,7 +350,6 @@ This project stands on:
 - [micro-wake-word](https://github.com/OHF-Voice/micro-wake-word) —
   the inspiration for the planned dual-engine architecture, and the
   wakeword engine ESPHome / Home Assistant Voice ship today.
-- [Lyna](https://github.com/horchd/lyna) — the companion trainer/studio.
 
 ## Contributing
 

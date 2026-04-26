@@ -1,5 +1,5 @@
 //! System tray icon + minimal menu. Left-click toggles the main window;
-//! right-click opens "Open / Reload / Open Lyna trainer / Quit".
+//! right-click opens "Open / Reload / Quit".
 
 use tauri::{
     App, Manager,
@@ -10,11 +10,10 @@ use tauri::{
 pub fn install(app: &mut App) -> tauri::Result<()> {
     let open = MenuItemBuilder::with_id("open", "Open control panel").build(app)?;
     let reload = MenuItemBuilder::with_id("reload", "Reload config").build(app)?;
-    let lyna = MenuItemBuilder::with_id("lyna", "Open Lyna trainer").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit horchd-gui").build(app)?;
 
     let menu = MenuBuilder::new(app)
-        .items(&[&open, &reload, &lyna, &quit])
+        .items(&[&open, &reload, &quit])
         .build()?;
 
     let _tray = TrayIconBuilder::new()
@@ -28,9 +27,6 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
                         tracing::warn!(?err, "reload failed");
                     }
                 });
-            }
-            "lyna" => {
-                let _ = tauri_plugin_opener::open_url("http://localhost:5173", None::<&str>);
             }
             "quit" => app.exit(0),
             _ => {}

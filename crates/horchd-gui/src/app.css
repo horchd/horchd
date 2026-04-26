@@ -228,3 +228,18 @@ input[type="range"].slider:focus::-moz-range-thumb {
   outline: 2px solid var(--color-accent);
   outline-offset: -1px;
 }
+
+/* Native <select> chevron slot — Tailwind has no `appearance-none` for
+   the OS dropdown arrow, and writing the prefixed properties inline as
+   arbitrary classes is verbose. We position our own ▾ on top via the
+   markup. */
+select.field-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+select.field-select option {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+}

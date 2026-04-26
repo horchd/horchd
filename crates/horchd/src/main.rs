@@ -125,9 +125,12 @@ async fn main() -> Result<()> {
         let s = shared_state.lock().await;
         s.config.engine.device.clone()
     };
-    let (mut audio_handle, frames) =
-        audio::start(&initial_device, AUDIO_CHANNEL_CAPACITY, Arc::clone(&audio_stats))
-            .context("starting audio capture")?;
+    let (mut audio_handle, frames) = audio::start(
+        &initial_device,
+        AUDIO_CHANNEL_CAPACITY,
+        Arc::clone(&audio_stats),
+    )
+    .context("starting audio capture")?;
     let inference_stats = Arc::new(inference::InferenceStats::new());
 
     let (event_tx, _) = broadcast::channel::<WakewordEvent>(EVENT_BROADCAST_CAPACITY);

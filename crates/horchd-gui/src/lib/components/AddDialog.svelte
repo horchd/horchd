@@ -1,9 +1,6 @@
 <script lang="ts">
-  import { Sparkles } from "@lucide/svelte";
-
   import { app } from "$lib/app.svelte";
   import { dbus } from "$lib/dbus";
-  import { openLyna } from "$lib/lyna";
 
   type Props = { onClose: () => void };
   let { onClose }: Props = $props();
@@ -70,19 +67,6 @@
   function onKey(ev: KeyboardEvent) {
     if (ev.key === "Escape") onClose();
   }
-
-  async function trainInLyna() {
-    try {
-      const where = await openLyna();
-      app.showToast(
-        where === "local"
-          ? "opened Lyna at localhost:5173"
-          : "Lyna isn't running locally — opened install instructions",
-      );
-    } catch (e) {
-      app.showToast(`couldn't open Lyna: ${e instanceof Error ? e.message : String(e)}`, true);
-    }
-  }
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -106,16 +90,7 @@
       <p class="text-muted text-[12px] leading-[1.5]">
         <strong>Import</strong> copies the model into
         <code class="font-mono text-[11px] bg-paper-2 px-1.5 py-px">{modelsDir}</code> first;
-        <strong>Register</strong> uses the file in place. Need a custom
-        wakeword?
-        <button
-          type="button"
-          class="inline-flex items-center gap-1 bg-transparent border-0 p-0 font-inherit
-                 text-accent border-b border-current cursor-pointer hover:text-ink"
-          onclick={trainInLyna}
-        >
-          <Sparkles size="11" /> train one in Lyna
-        </button>.
+        <strong>Register</strong> uses the file in place.
       </p>
     </header>
 
@@ -144,7 +119,7 @@
         type="text"
         bind:value={name}
         autocomplete="off"
-        placeholder="lyna"
+        placeholder="jarvis"
       />
     </div>
 
@@ -162,7 +137,7 @@
           spellcheck="false"
           placeholder={mode === "import"
             ? "/path/to/your/model.onnx"
-            : "~/.local/share/horchd/models/lyna.onnx"}
+            : "~/.local/share/horchd/models/jarvis.onnx"}
         />
         <button
           type="button"

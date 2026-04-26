@@ -194,7 +194,7 @@ impl Preprocessor {
     }
 }
 
-/// Per-wakeword classifier wrapping a Lyna / openwakeword `.onnx` model.
+/// Per-wakeword classifier wrapping an openwakeword-compatible `.onnx`.
 /// Input: `(1, CLASSIFIER_WINDOW=16, EMBEDDING_DIM=96)`. Output: scalar
 /// score in `[0, 1]`.
 pub struct Classifier {
