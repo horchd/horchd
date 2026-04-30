@@ -26,7 +26,9 @@ embedding      = "/usr/local/share/horchd/embedding_model.onnx"
 # ----------------------------------------------------------------------
 # Wakewords. Each [[wakeword]] block loads one classifier .onnx.
 # Field defaults: threshold = 0.5, cooldown_ms = 1500, enabled = true.
-# `~` and `$VAR` paths are expanded.
+# Leading `~` is expanded to $HOME; environment variables ($FOO) are NOT
+# expanded — that's intentional, so a hostile env can't redirect a
+# model path.
 #
 # Example: a custom-trained openWakeWord-compatible model
 #

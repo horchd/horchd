@@ -45,6 +45,32 @@ const EMBEDDING_INPUT_NAME: &str = "input_1";
 const MELSPEC_TRANSFORM_DIVISOR: f32 = 10.0;
 const MELSPEC_TRANSFORM_OFFSET: f32 = 2.0;
 
+/// openwakeword/model.py L330-333 forces the per-classifier prediction
+/// to 0.0 for the first 5 frames so the cold-start (zero-padded
+/// embedding window + ONNX kernel warmup) doesn't produce spurious
+/// detections. Without this, the very first frames of operation can
+/// score arbitrarily high before the window is filled with real
+/// embeddings.
+const COLD_START_ZEROED_FRAMES: u64 = 5;
+
+/// Configure the ORT session for an embedded daemon: 1 intra- and 1
+/// inter-op thread per session. With ~12.5 inferences/sec the workload
+/// is tiny, but ORT defaults to `nproc` worker threads per session —
+/// across (1 melspec + 1 embedding + N classifiers) sessions this would
+/// spawn 8+ idle threads on a typical box.
+fn build_session(path: &Path) -> Result<Session> {
+    let builder = Session::builder().context("ort session builder")?;
+    let builder = builder
+        .with_intra_threads(1)
+        .map_err(|e| anyhow::anyhow!("setting intra_op_num_threads: {e}"))?;
+    let mut builder = builder
+        .with_inter_threads(1)
+        .map_err(|e| anyhow::anyhow!("setting inter_op_num_threads: {e}"))?;
+    builder
+        .commit_from_file(path)
+        .with_context(|| format!("loading ONNX model from {}", path.display()))
+}
+
 /// Streams mono 16 kHz audio frames through melspec + embedding ONNX
 /// models and emits one 96-dim embedding per 80 ms input frame.
 pub struct Preprocessor {
@@ -56,21 +82,8 @@ pub struct Preprocessor {
 
 impl Preprocessor {
     pub fn new(melspec_path: &Path, embedding_path: &Path) -> Result<Self> {
-        let melspec = Session::builder()
-            .context("ort session builder")?
-            .commit_from_file(melspec_path)
-            .with_context(|| {
-                format!(
-                    "loading melspectrogram model from {}",
-                    melspec_path.display()
-                )
-            })?;
-        let embedding = Session::builder()
-            .context("ort session builder")?
-            .commit_from_file(embedding_path)
-            .with_context(|| {
-                format!("loading embedding model from {}", embedding_path.display())
-            })?;
+        let melspec = build_session(melspec_path)?;
+        let embedding = build_session(embedding_path)?;
 
         // Warm-start the mel ringbuffer with `1.0` ones, mirroring
         // openwakeword (`melspectrogram_buffer = np.ones((76, 32))`).
@@ -200,42 +213,53 @@ impl Preprocessor {
 pub struct Classifier {
     pub name: String,
     session: Session,
+    /// Pre-allocated reusable input tensor — the shape is fixed, so we
+    /// avoid allocating ~6 KB per frame.
+    scratch: Array3<f32>,
+    /// Number of inputs we've scored so far. The first
+    /// `COLD_START_ZEROED_FRAMES` are clamped to 0.0 to avoid spurious
+    /// detections from the zero-padded warm-up window.
+    frames_seen: u64,
 }
 
 impl Classifier {
     pub fn load(name: String, model_path: &Path) -> Result<Self> {
-        let session = Session::builder()
-            .context("ort session builder")?
-            .commit_from_file(model_path)
-            .with_context(|| {
-                format!(
-                    "loading wakeword model {name:?} from {}",
-                    model_path.display()
-                )
-            })?;
+        let session = build_session(model_path)
+            .with_context(|| format!("loading wakeword model {name:?}"))?;
         validate_classifier_shape(&session, &name, model_path)?;
-        Ok(Self { name, session })
+        Ok(Self {
+            name,
+            session,
+            scratch: Array3::<f32>::zeros((1, CLASSIFIER_WINDOW, EMBEDDING_DIM)),
+            frames_seen: 0,
+        })
     }
 
     /// Score the supplied window. Caller guarantees it is filled in
     /// chronological order with the most recent embedding last.
     pub fn score(&mut self, window: &[[f32; EMBEDDING_DIM]; CLASSIFIER_WINDOW]) -> Result<f32> {
-        let mut input = Array3::<f32>::zeros((1, CLASSIFIER_WINDOW, EMBEDDING_DIM));
         for (t, frame) in window.iter().enumerate() {
             for d in 0..EMBEDDING_DIM {
-                input[(0, t, d)] = frame[d];
+                self.scratch[(0, t, d)] = frame[d];
             }
         }
         let outputs = self
             .session
-            .run(ort::inputs![TensorRef::from_array_view(&input)?])
+            .run(ort::inputs![TensorRef::from_array_view(&self.scratch)?])
             .with_context(|| format!("running classifier {:?}", self.name))?;
         let (_, data) = outputs[0]
             .try_extract_tensor::<f32>()
             .with_context(|| format!("extracting classifier {:?} output", self.name))?;
-        data.first()
+        let raw = data
+            .first()
             .copied()
-            .with_context(|| format!("classifier {:?} returned empty output", self.name))
+            .with_context(|| format!("classifier {:?} returned empty output", self.name))?;
+
+        self.frames_seen = self.frames_seen.saturating_add(1);
+        if self.frames_seen <= COLD_START_ZEROED_FRAMES {
+            return Ok(0.0);
+        }
+        Ok(raw)
     }
 }
 
@@ -284,12 +308,22 @@ fn dim_matches(dim: i64, expected: i64) -> bool {
     dim <= 0 || dim == expected
 }
 
-/// Counts inference work for the `score_fps` field of `GetStatus`.
-/// At steady state matches the audio fps (12.5).
+/// Inference-side performance counters: score throughput plus a rolling
+/// latency window (microseconds per `pipeline.process` call). Cheap
+/// atomic ops only, safe to read from D-Bus method handlers and write
+/// from the inference task without locks.
 #[derive(Debug)]
 pub struct InferenceStats {
     started_at: Instant,
     scores_emitted: AtomicU64,
+    /// Sum of inference latencies (µs) since start. Pair with
+    /// `scores_emitted` for an unbounded mean; useful even after hours.
+    latency_us_sum: AtomicU64,
+    /// Worst observed inference latency (µs). Sticky — never decreases.
+    latency_us_max: AtomicU64,
+    /// Most recent inference latency (µs), so live UI meters can show
+    /// the current frame's cost without a moving window.
+    latency_us_last: AtomicU64,
 }
 
 impl InferenceStats {
@@ -297,14 +331,18 @@ impl InferenceStats {
         Self {
             started_at: Instant::now(),
             scores_emitted: AtomicU64::new(0),
+            latency_us_sum: AtomicU64::new(0),
+            latency_us_max: AtomicU64::new(0),
+            latency_us_last: AtomicU64::new(0),
         }
     }
 
     pub fn score_fps(&self) -> f64 {
         let elapsed = self.started_at.elapsed().as_secs_f64();
-        match elapsed > 0.0 {
-            true => self.scores_emitted.load(Ordering::Relaxed) as f64 / elapsed,
-            false => 0.0,
+        if elapsed > 0.0 {
+            self.scores_emitted.load(Ordering::Relaxed) as f64 / elapsed
+        } else {
+            0.0
         }
     }
 
@@ -312,8 +350,33 @@ impl InferenceStats {
         self.scores_emitted.load(Ordering::Relaxed)
     }
 
-    pub fn record_score(&self) {
+    /// Mean inference latency in microseconds (returns 0 before any
+    /// frame has been processed).
+    pub fn mean_latency_us(&self) -> u64 {
+        let n = self.scores_emitted.load(Ordering::Relaxed);
+        if n == 0 {
+            return 0;
+        }
+        self.latency_us_sum.load(Ordering::Relaxed) / n
+    }
+
+    pub fn max_latency_us(&self) -> u64 {
+        self.latency_us_max.load(Ordering::Relaxed)
+    }
+
+    pub fn last_latency_us(&self) -> u64 {
+        self.latency_us_last.load(Ordering::Relaxed)
+    }
+
+    /// Record one `pipeline.process` call and its wall-clock duration.
+    /// Call once per frame from the inference task.
+    pub fn record_score(&self, dt: std::time::Duration) {
+        let us = u64::try_from(dt.as_micros()).unwrap_or(u64::MAX);
         self.scores_emitted.fetch_add(1, Ordering::Relaxed);
+        self.latency_us_sum.fetch_add(us, Ordering::Relaxed);
+        self.latency_us_last.store(us, Ordering::Relaxed);
+        // Lock-free max via fetch_max.
+        self.latency_us_max.fetch_max(us, Ordering::Relaxed);
     }
 }
 
@@ -389,5 +452,14 @@ mod tests {
         const { assert!(FRAME_SAMPLES + MEL_OVERLAP_SAMPLES == RAW_BUFFER_SAMPLES) };
         const { assert!(EMBEDDING_WINDOW == 76) };
         const { assert!(EMBEDDING_WINDOW <= MEL_BUFFER_FRAMES) };
+    }
+
+    #[test]
+    fn dim_matches_treats_zero_and_negative_as_dynamic() {
+        assert!(dim_matches(-1, 16));
+        assert!(dim_matches(0, 16));
+        assert!(dim_matches(16, 16));
+        assert!(!dim_matches(17, 16));
+        assert!(!dim_matches(8, 16));
     }
 }

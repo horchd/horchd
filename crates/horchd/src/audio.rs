@@ -11,6 +11,7 @@
 //! must never block. We use [`mpsc::Sender::try_send`]; on overflow the
 //! frame is dropped and counted, never blocked.
 
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::Instant;
@@ -37,6 +38,12 @@ pub struct AudioStats {
     /// Most recent cpal callback's peak |sample|, stored as `f32::to_bits`
     /// in an `AtomicU32` (no atomic floats in std). Range `[0, 1]`.
     last_peak_bits: AtomicU32,
+}
+
+impl Default for AudioStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AudioStats {
@@ -194,7 +201,7 @@ fn describe(device: &cpal::Device) -> String {
 ///    16 kHz (e.g. 32 / 48 / 96 kHz) → decimate down.
 /// 3. Otherwise fail — naive integer decimation can't bridge the gap and
 ///    rubato-style resampling lands in a later phase.
-fn select_input_config(device: &cpal::Device) -> Result<(SupportedStreamConfig, usize)> {
+fn select_input_config(device: &cpal::Device) -> Result<(SupportedStreamConfig, NonZeroUsize)> {
     let ranges: Vec<SupportedStreamConfigRange> = device
         .supported_input_configs()
         .context("listing supported input configs")?
@@ -204,7 +211,7 @@ fn select_input_config(device: &cpal::Device) -> Result<(SupportedStreamConfig, 
     }
 
     if let Some(cfg) = pick_exact_target(&ranges) {
-        return Ok((cfg, 1));
+        return Ok((cfg, NonZeroUsize::new(1).expect("1 != 0")));
     }
     if let Some((cfg, decim)) = pick_integer_multiple(&ranges) {
         return Ok((cfg, decim));
@@ -253,12 +260,12 @@ fn pick_exact_target(ranges: &[SupportedStreamConfigRange]) -> Option<SupportedS
 
 fn pick_integer_multiple(
     ranges: &[SupportedStreamConfigRange],
-) -> Option<(SupportedStreamConfig, usize)> {
+) -> Option<(SupportedStreamConfig, NonZeroUsize)> {
     ranges
         .iter()
         .filter(|r| {
             let m = r.max_sample_rate();
-            m >= TARGET_SAMPLE_RATE && m.is_multiple_of(TARGET_SAMPLE_RATE)
+            m > TARGET_SAMPLE_RATE && m.is_multiple_of(TARGET_SAMPLE_RATE)
         })
         .min_by(|a, b| {
             sample_format_pref(a.sample_format())
@@ -266,10 +273,10 @@ fn pick_integer_multiple(
                 .then_with(|| a.max_sample_rate().cmp(&b.max_sample_rate()))
                 .then_with(|| a.channels().cmp(&b.channels()))
         })
-        .map(|r| {
+        .and_then(|r| {
             let cfg = r.with_max_sample_rate();
-            let decim = (cfg.sample_rate() / TARGET_SAMPLE_RATE) as usize;
-            (cfg, decim)
+            let raw = (cfg.sample_rate() / TARGET_SAMPLE_RATE) as usize;
+            NonZeroUsize::new(raw).map(|d| (cfg, d))
         })
 }
 
@@ -319,26 +326,36 @@ where
     )
 }
 
-struct CallbackState {
+pub struct CallbackState {
     in_channels: usize,
-    decimation: usize,
+    /// Encoded as `NonZeroUsize` so the `phase % decimation` in `feed`
+    /// can never panic, even under future refactors.
+    decimation: NonZeroUsize,
     decimation_phase: usize,
     frame: Frame,
     frame_pos: usize,
+    /// Pre-allocated swap buffer so the cpal callback (real-time audio
+    /// thread) doesn't allocate when emitting a frame; we just `swap`
+    /// the two boxes when one is full.
+    spare: Frame,
 }
 
 impl CallbackState {
-    fn new(in_channels: u16, decimation: usize) -> Self {
+    pub fn new(in_channels: u16, decimation: NonZeroUsize) -> Self {
         Self {
             in_channels: in_channels as usize,
             decimation,
             decimation_phase: 0,
             frame: Box::new([0.0; FRAME_SAMPLES]),
             frame_pos: 0,
+            spare: Box::new([0.0; FRAME_SAMPLES]),
         }
     }
 
-    fn process<S>(&mut self, data: &[S], tx: &mpsc::Sender<Frame>, stats: &AudioStats)
+    /// Hot-path: convert one cpal callback's interleaved buffer into 16
+    /// kHz mono frames. `pub` so benches and integration tests can
+    /// drive it without spinning up cpal.
+    pub fn process<S>(&mut self, data: &[S], tx: &mpsc::Sender<Frame>, stats: &AudioStats)
     where
         S: SizedSample,
         f32: FromSample<S>,
@@ -368,7 +385,7 @@ impl CallbackState {
 
     fn feed(&mut self, sample: f32, tx: &mpsc::Sender<Frame>, stats: &AudioStats) {
         let phase = self.decimation_phase;
-        self.decimation_phase = (phase + 1) % self.decimation;
+        self.decimation_phase = (phase + 1) % self.decimation.get();
         if phase != 0 {
             return;
         }
@@ -379,12 +396,24 @@ impl CallbackState {
             return;
         }
 
-        let full = std::mem::replace(&mut self.frame, Box::new([0.0; FRAME_SAMPLES]));
+        // Swap the full buffer out for the pre-allocated spare — no
+        // allocator call on the realtime audio thread. If the consumer
+        // can't keep up, we drop the frame and the still-full box rides
+        // along as the next spare.
+        std::mem::swap(&mut self.frame, &mut self.spare);
         self.frame_pos = 0;
-
-        match tx.try_send(full) {
+        match tx.try_send(std::mem::replace(
+            &mut self.spare,
+            Box::new([0.0; FRAME_SAMPLES]),
+        )) {
             Ok(()) => stats.record_frame(),
-            Err(_) => stats.record_drop(),
+            Err(mpsc::error::TrySendError::Full(returned)) => {
+                // Reuse the rejected box — it stays as our spare so the
+                // next frame doesn't alloc either.
+                self.spare = returned;
+                stats.record_drop();
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => stats.record_drop(),
         }
     }
 }
@@ -425,7 +454,7 @@ mod tests {
         );
         let (cfg, decim) = pick_integer_multiple(&ranges).expect("integer multiple");
         assert_eq!(cfg.sample_rate(), 32_000, "smallest matching max wins");
-        assert_eq!(decim, 2);
+        assert_eq!(decim.get(), 2);
     }
 
     #[test]
@@ -439,7 +468,7 @@ mod tests {
     fn callback_emits_frames_at_expected_rate() {
         // 48 kHz mono, decimation 3 → one mono input sample contributes
         // every 3rd raw sample; FRAME_SAMPLES * 3 = 3840 raw samples per frame.
-        let mut state = CallbackState::new(1, 3);
+        let mut state = CallbackState::new(1, NonZeroUsize::new(3).unwrap());
         let stats = Arc::new(AudioStats::new());
         let (tx, mut rx) = mpsc::channel::<Frame>(8);
         let raw: Vec<f32> = (0..FRAME_SAMPLES * 3 * 2)
@@ -464,7 +493,7 @@ mod tests {
 
     #[test]
     fn callback_drops_when_channel_full() {
-        let mut state = CallbackState::new(1, 1);
+        let mut state = CallbackState::new(1, NonZeroUsize::new(1).unwrap());
         let stats = Arc::new(AudioStats::new());
         let (tx, _rx) = mpsc::channel::<Frame>(1);
         let raw: Vec<f32> = vec![0.0; FRAME_SAMPLES * 4];
@@ -475,7 +504,7 @@ mod tests {
 
     #[test]
     fn callback_downmixes_stereo() {
-        let mut state = CallbackState::new(2, 1);
+        let mut state = CallbackState::new(2, NonZeroUsize::new(1).unwrap());
         let stats = Arc::new(AudioStats::new());
         let (tx, mut rx) = mpsc::channel::<Frame>(2);
         // Stereo interleaved: L=1.0, R=-1.0 → mono mean = 0.0

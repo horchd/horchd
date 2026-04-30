@@ -4,7 +4,6 @@
 > any of *N* user-defined wakewords in parallel, and broadcasts a D-Bus
 > `Detected` signal the moment one fires.
 
-[![ci](https://github.com/horchd/horchd/actions/workflows/ci.yml/badge.svg)](https://github.com/horchd/horchd/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 [![docs](https://img.shields.io/badge/docs-horchd.github.io-c8311c)](https://horchd.github.io)
 
@@ -75,20 +74,73 @@ does internally — `horchd` ports it to Rust + [ort](https://crates.io/crates/o
 so it can run as a long-lived daemon instead of a per-request Python
 process.
 
+## Performance
+
+Microbenchmarks for the two hot paths that aren't dominated by ONNX
+runtime cost: the cpal-callback (downmix + decimation + peak EMA + frame
+emit) and the per-wakeword detector state machine. ONNX inference itself
+is bounded by `ort` and the bundled openWakeWord models — measured live
+via the daemon's `mean_latency_us` / `max_latency_us` counters and
+exposed in the `stats` log line every 30 s.
+
+```text
+                    │ 0       2        4        6        8       10 µs
+Detector::update    │█ 6.4 ns
+  steady-state      │
+Detector::update    │░ 1.1 ns
+  disabled          │
+audio callback      │█████████████ 2.85 µs
+  mono · 1280 samp  │
+audio callback      │██████████████████████████████████████ 8.34 µs
+  stereo · 3840·d3  │
+```
+
+Real-world budget at the daemon's 12.5 fps frame rate:
+**12.5 × 8.34 µs ≈ 0.01 % of one CPU core for audio capture**, plus
+~13 ns/frame for every detector. The remaining cycles all go to ONNX
+runtime; the README's "≈1 % CPU at idle" claim is set by the inference
+stack, not the Rust glue.
+
+Numbers above were measured on:
+
+- **CPU**: AMD Ryzen 7 9800X3D (8 cores / 16 threads, 3D V-Cache)
+- **RAM**: 32 GiB DDR5
+- **OS**: CachyOS Linux, kernel 7.0.2
+- **Toolchain**: rustc 1.94.1, profile `release` (LTO thin, codegen-units = 1)
+
+Release-binary footprint on the same host:
+
+| Binary     | Size    | Notes                                                   |
+| ---------- | ------- | ------------------------------------------------------- |
+| `horchd`   | 28.9 MB | bundles ONNX Runtime via `ort` `download-binaries` feature |
+| `horchctl` | 8.5 MB  | reqwest + rustls (no openssl), clap, zbus, sha2         |
+
+Reproduce on your hardware:
+
+```bash
+./scripts/bench.sh        # writes target/criterion/report/index.html
+./scripts/coverage.sh     # writes target/llvm-cov/html/index.html
+```
+
+`scripts/bench.sh` uses [Criterion](https://github.com/bheisler/criterion.rs)
+and produces statistical confidence intervals; `scripts/coverage.sh`
+auto-installs `cargo-llvm-cov` on first run.
+
 ## Repository layout
 
 ```
 horchd/
 ├── crates/
 │   ├── horchd-core/   shared types + D-Bus proxy trait (consumed by every binary)
-│   ├── horchd/        the daemon
+│   ├── horchd/        the daemon (lib + bin)
 │   ├── horchctl/      CLI client (status, list, monitor, threshold, add, remove, reload, …)
 │   └── horchd-gui/    Tauri 2 tray + control panel (SvelteKit + Tailwind v4)
+├── python/            optional training helper (subprocessed by the GUI's Train tab)
 ├── shared-models/     melspectrogram.onnx + embedding_model.onnx (gitignored)
 ├── systemd/           user unit
 ├── packaging/         install.sh + arch/PKGBUILD
 ├── examples/          horchd.toml + subscriber.{sh,py}
-└── .github/workflows/ ci.yml (fmt + clippy + test + frontend) + release.yml
+└── scripts/           check.sh, coverage.sh, bench.sh
 ```
 
 ## Install
@@ -245,16 +297,27 @@ Object:     /xyz/horchd/Daemon
 Interface:  xyz.horchd.Daemon1
 ```
 
-| Method          | Args                                                | Returns        |
-| --------------- | --------------------------------------------------- | -------------- |
-| `ListWakewords` | —                                                   | `a(sdsbu)`     |
-| `GetStatus`     | —                                                   | `(bdd)`        |
-| `Add`           | `s name`, `s model_path`, `d threshold`, `u cooldown_ms` | `()`      |
-| `Remove`        | `s name`                                            | `()`           |
-| `SetThreshold`  | `s name`, `d threshold`, `b persist`                | `()`           |
-| `SetEnabled`    | `s name`, `b enabled`, `b persist`                  | `()`           |
-| `SetCooldown`   | `s name`, `u ms`, `b persist`                       | `()`           |
-| `Reload`        | —                                                   | `()`           |
+| Method               | Args                                                     | Returns      |
+| -------------------- | -------------------------------------------------------- | ------------ |
+| `ListWakewords`      | —                                                        | `a(sdsbu)`   |
+| `GetStatus`          | —                                                        | `(bddd)`     |
+| `Add`                | `s name`, `s model_path`, `d threshold`, `u cooldown_ms` | `()`         |
+| `Remove`             | `s name`                                                 | `()`         |
+| `SetThreshold`       | `s name`, `d threshold`, `b persist`                     | `()`         |
+| `SetEnabled`         | `s name`, `b enabled`, `b persist`                       | `()`         |
+| `SetCooldown`        | `s name`, `u ms`, `b persist`                            | `()`         |
+| `ListInputDevices`   | —                                                        | `as`         |
+| `SetInputDevice`     | `s name`, `b persist`                                    | `()`         |
+| `Reload`             | —                                                        | `()`         |
+
+`GetStatus` returns `(running, audio_fps, score_fps, mic_level)` — the
+trailing `mic_level` is the smoothed peak `|sample|` of the most recent
+cpal callback in `[0, 1]`, used by the GUI mic meter.
+
+`Add` validates that the supplied `.onnx` lives under the canonical
+models directory (`$XDG_DATA_HOME/horchd/models/` or
+`~/.local/share/horchd/models/`) and rejects anything else, so a
+session-bus client cannot point the daemon at arbitrary files.
 
 | Signal          | Args                                  | Notes |
 | --------------- | ------------------------------------- | ----- |
@@ -310,29 +373,39 @@ cargo test --workspace
 RUST_LOG=horchd=debug cargo run --bin horchd -- --config examples/horchd.toml
 ```
 
+Helpers under [`scripts/`](scripts/):
+
+```bash
+./scripts/check.sh       # fmt + clippy + tests + frontend type-check
+./scripts/coverage.sh    # cargo-llvm-cov HTML report (auto-installs)
+./scripts/bench.sh       # Criterion benchmarks → target/criterion/report
+```
+
+Benchmarks live under `crates/horchd/benches/` (Criterion). The
+detector state machine and cpal-callback hot path are benchmarked so
+regressions in either show up immediately.
+
 GUI dev:
 
 ```bash
-cd crates/horchd-gui/src-web
+cd crates/horchd-gui
 bun install
-bun run dev          # vite dev server with HMR
-# In another terminal: cargo run -p horchd-gui  (Tauri loads http://localhost:5173)
+bun run dev          # vite dev server with HMR on :5173
+# In another terminal: cargo tauri dev   (loads http://localhost:5173)
 ```
 
-The SvelteKit page also runs **standalone in any browser** with
-deterministic mock data, so you can iterate on the design without a
-running daemon:
+The SvelteKit page also runs **standalone in any browser** against a
+deterministic mock backend, so you can iterate on the design without a
+running daemon (or even Tauri):
 
 ```bash
-cd crates/horchd-gui/src-web
+cd crates/horchd-gui
 bun run dev
 xdg-open http://localhost:5173
 ```
 
-CI runs fmt + clippy + workspace tests + frontend type-check + frontend
-build on every push and PR. Tagged releases (`v*.*.*`) build a tarball
-of the daemon + CLI + systemd unit + examples and publish it to a
-GitHub Release.
+The mock kicks in automatically when `window.__TAURI_INTERNALS__` is
+absent — see `crates/horchd-gui/src/lib/dbus.ts`.
 
 ## Roadmap
 
@@ -372,9 +445,10 @@ This project stands on:
 
 ## Contributing
 
-Issues + PRs welcome at <https://github.com/horchd/horchd>. CI must
-stay green; see `.github/workflows/ci.yml` for the gates. The full
-build plan + design notes live at <https://horchd.github.io>.
+Issues + PRs welcome at <https://github.com/horchd/horchd>. Run
+`cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D
+warnings` before opening one. The full build plan + design notes live
+at <https://horchd.github.io>.
 
 ## License
 

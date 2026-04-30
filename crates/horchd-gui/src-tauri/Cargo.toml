@@ -2,6 +2,7 @@
 name = "horchd-gui"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
@@ -12,6 +13,9 @@ description = "Tauri tray app + control panel for the horchd wakeword daemon"
 # (`webkit2gtk-4.1-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev`,
 # `libxdo-dev`) and (for `cargo tauri build/dev`) the tauri-cli.
 
+[lints]
+workspace = true
+
 [lib]
 name = "horchd_gui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
@@ -20,15 +24,15 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-anyhow = "1"
-futures-util = "0.3"
+anyhow.workspace = true
+futures-util.workspace = true
 horchd-core = { version = "0.1.0", path = "../../horchd-core" }
 hound = "3"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde.workspace = true
+serde_json.workspace = true
 tauri = { version = "2", features = ["tray-icon"] }
-tauri-plugin-shell = "2"
-tokio = { version = "1", features = ["io-util", "macros", "process", "rt-multi-thread", "sync"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-zbus = "5"
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt-multi-thread", "sync"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+which = "8"
+zbus.workspace = true

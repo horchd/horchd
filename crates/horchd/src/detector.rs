@@ -33,6 +33,10 @@ impl Detector {
     /// Update with a fresh score and `now`. Returns `Some(event)` iff
     /// the score just crossed the threshold from below *and* the
     /// cooldown window has elapsed since the previous fire.
+    ///
+    /// `#[must_use]`: the returned event is the only signal that a fire
+    /// happened — silently dropping it loses the detection.
+    #[must_use]
     pub fn update(&mut self, score: f64, now: Instant) -> Option<WakewordEvent> {
         if !self.enabled {
             self.was_above = false;
@@ -65,8 +69,9 @@ fn monotonic_us() -> u64 {
         tv_sec: 0,
         tv_nsec: 0,
     };
-    // SAFETY: clock_gettime is signal-safe and only writes through `&mut ts`.
-    let ret = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) };
+    // SAFETY: clock_gettime is signal-safe and only writes through the
+    // raw pointer to our local `ts`.
+    let ret = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &raw mut ts) };
     if ret != 0 {
         return 0;
     }

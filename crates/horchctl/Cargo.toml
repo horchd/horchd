@@ -2,16 +2,22 @@
 name = "horchctl"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "CLI client for the horchd wakeword daemon"
 
+[lints]
+workspace = true
+
 [dependencies]
-anyhow = "1.0.102"
-clap = { version = "4.6.1", features = ["derive"] }
-futures-util = "0.3.32"
+anyhow.workspace = true
+clap.workspace = true
+futures-util.workspace = true
 horchd-core = { version = "0.1.0", path = "../horchd-core" }
-tokio = { version = "1.52.1", features = ["rt-multi-thread", "macros", "signal"] }
-zbus = "5.14.0"
+reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "stream"] }
+sha2 = "0.10"
+tokio = { workspace = true, features = ["rt", "macros", "signal", "time"] }
+zbus.workspace = true

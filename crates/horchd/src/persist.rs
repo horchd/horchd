@@ -122,6 +122,7 @@ fn read_doc(path: &Path) -> Result<DocumentMut> {
 }
 
 fn write_doc(path: &Path, doc: &DocumentMut) -> Result<()> {
+    use std::io::Write as _;
     let mut tmp: PathBuf = path.to_path_buf();
     let mut name = tmp
         .file_name()
@@ -129,8 +130,25 @@ fn write_doc(path: &Path, doc: &DocumentMut) -> Result<()> {
         .unwrap_or_else(|| std::ffi::OsString::from("config"));
     name.push(".horchd-tmp");
     tmp.set_file_name(name);
-    fs::write(&tmp, doc.to_string())
+
+    // Inherit the original file's permissions so a `chmod 600` on the
+    // user's config doesn't get reset to umask defaults on every save.
+    let mode = fs::metadata(path).ok().map(|m| m.permissions());
+
+    let mut f =
+        fs::File::create(&tmp).with_context(|| format!("creating temp file {}", tmp.display()))?;
+    f.write_all(doc.to_string().as_bytes())
         .with_context(|| format!("writing temp file {}", tmp.display()))?;
+    // sync_all flushes data + metadata so a crash between write+rename
+    // can't leave an empty/torn file behind.
+    f.sync_all()
+        .with_context(|| format!("fsyncing temp file {}", tmp.display()))?;
+    drop(f);
+    if let Some(m) = mode
+        && let Err(err) = fs::set_permissions(&tmp, m)
+    {
+        tracing::warn!(?err, path = %tmp.display(), "preserving permissions failed");
+    }
     fs::rename(&tmp, path).with_context(|| {
         format!(
             "renaming {} → {} (atomic replace)",
@@ -146,10 +164,11 @@ mod tests {
     use super::*;
     use std::path::Path;
 
-    fn write_tmp(name: &str, body: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("horchd-persist-test-{name}.toml"));
+    fn write_tmp(name: &str, body: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join(format!("horchd-persist-test-{name}.toml"));
         fs::write(&p, body).unwrap();
-        p
+        (dir, p)
     }
 
     const SAMPLE: &str = r#"# top-of-file comment
@@ -176,7 +195,7 @@ threshold = 0.7
 
     #[test]
     fn set_threshold_preserves_comments_and_formatting() {
-        let path = write_tmp("threshold", SAMPLE);
+        let (_dir, path) = write_tmp("threshold", SAMPLE);
         set_threshold(&path, "alexa", 0.55).unwrap();
         let after = fs::read_to_string(&path).unwrap();
         assert!(after.contains("# top-of-file comment"));
@@ -184,12 +203,11 @@ threshold = 0.7
         assert!(after.contains("# mic device"));
         assert!(after.contains("threshold = 0.55"));
         assert!(after.contains("name = \"jarvis\""));
-        fs::remove_file(&path).ok();
     }
 
     #[test]
     fn add_appends_new_block() {
-        let path = write_tmp("add", SAMPLE);
+        let (_dir, path) = write_tmp("add", SAMPLE);
         add_wakeword(
             &path,
             &Wakeword {
@@ -213,12 +231,11 @@ threshold = 0.7
                 .unwrap()
                 .contains("enabled")
         );
-        fs::remove_file(&path).ok();
     }
 
     #[test]
     fn add_rejects_duplicate_name() {
-        let path = write_tmp("add-dup", SAMPLE);
+        let (_dir, path) = write_tmp("add-dup", SAMPLE);
         let err = add_wakeword(
             &path,
             &Wakeword {
@@ -231,16 +248,64 @@ threshold = 0.7
         )
         .unwrap_err();
         assert!(err.to_string().contains("already exists"));
-        fs::remove_file(&path).ok();
     }
 
     #[test]
     fn remove_drops_block() {
-        let path = write_tmp("remove", SAMPLE);
+        let (_dir, path) = write_tmp("remove", SAMPLE);
         remove_wakeword(&path, "jarvis").unwrap();
         let after = fs::read_to_string(&path).unwrap();
         assert!(!after.contains("jarvis"));
         assert!(after.contains("alexa"));
-        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn set_engine_device_preserves_top_of_file_comment() {
+        let (_dir, path) = write_tmp("engine-device", SAMPLE);
+        set_engine_device(&path, "hw:CARD=USB").unwrap();
+        let after = fs::read_to_string(&path).unwrap();
+        assert!(after.contains("# top-of-file comment"));
+        assert!(after.contains("device = \"hw:CARD=USB\""));
+    }
+
+    #[test]
+    fn set_enabled_round_trips() {
+        let (_dir, path) = write_tmp("enabled", SAMPLE);
+        set_enabled(&path, "alexa", false).unwrap();
+        let after = fs::read_to_string(&path).unwrap();
+        assert!(after.contains("enabled = false"));
+        assert!(after.contains("# a custom wakeword"));
+    }
+
+    #[test]
+    fn set_cooldown_round_trips() {
+        let (_dir, path) = write_tmp("cooldown", SAMPLE);
+        set_cooldown_ms(&path, "jarvis", 500).unwrap();
+        let after = fs::read_to_string(&path).unwrap();
+        assert!(after.contains("cooldown_ms = 500"));
+    }
+
+    #[test]
+    fn add_then_remove_round_trips_to_subset_of_original() {
+        let (_dir, path) = write_tmp("add-remove", SAMPLE);
+        add_wakeword(
+            &path,
+            &Wakeword {
+                name: "wetter".into(),
+                model: Path::new("/wetter.onnx").to_path_buf(),
+                threshold: Wakeword::DEFAULT_THRESHOLD,
+                cooldown_ms: Wakeword::DEFAULT_COOLDOWN_MS,
+                enabled: true,
+            },
+        )
+        .unwrap();
+        remove_wakeword(&path, "wetter").unwrap();
+        let after = fs::read_to_string(&path).unwrap();
+        assert!(!after.contains("wetter"));
+        assert!(after.contains("alexa"));
+        assert!(after.contains("jarvis"));
+        // Comments survive both edits
+        assert!(after.contains("# top-of-file comment"));
+        assert!(after.contains("# a custom wakeword"));
     }
 }

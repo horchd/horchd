@@ -24,8 +24,8 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            commands::register_state(app);
             tray::install(app)?;
             events::spawn(app.handle().clone());
             Ok(())
@@ -54,6 +54,8 @@ pub fn run() {
             commands::training_env_status,
             commands::setup_training_env,
             commands::fetch_negatives,
+            commands::cancel_setup,
+            commands::cancel_training,
         ])
         .run(tauri::generate_context!())
         .expect("running horchd-gui");

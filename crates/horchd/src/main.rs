@@ -4,18 +4,12 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use horchd::{AudioCmd, audio, detector, inference, persist, service, state};
 use horchd_core::{Config, WakewordEvent};
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc};
 use tracing_subscriber::EnvFilter;
 use zbus::Connection;
 use zbus::object_server::SignalEmitter;
-
-mod audio;
-mod detector;
-mod inference;
-mod persist;
-mod service;
-mod state;
 
 const DBUS_NAME: &str = "xyz.horchd.Daemon";
 const DBUS_PATH: &str = "/xyz/horchd/Daemon";
@@ -39,20 +33,6 @@ const SCORE_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Stats log cadence.
 const STATS_LOG_INTERVAL: Duration = Duration::from_secs(30);
-
-/// Commands the D-Bus service handler can send back to `main` so audio
-/// device hot-swaps run on the thread that owns the (`!Send`) cpal
-/// `Stream`.
-pub enum AudioCmd {
-    List {
-        reply: oneshot::Sender<Result<Vec<String>>>,
-    },
-    SetDevice {
-        name: String,
-        persist: bool,
-        reply: oneshot::Sender<Result<()>>,
-    },
-}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -137,6 +117,12 @@ async fn main() -> Result<()> {
     let (score_tx, _) = broadcast::channel::<(String, f64)>(SCORE_BROADCAST_CAPACITY);
     let (audio_cmd_tx, mut audio_cmd_rx) = mpsc::channel::<AudioCmd>(8);
 
+    // Subscribe BEFORE spawning the inference task so we can't lose any
+    // events fired between spawn and the first `subscribe()` call. The
+    // signal-emitter tasks pick up these `Receiver`s by move below.
+    let events_rx = event_tx.subscribe();
+    let scores_rx = score_tx.subscribe();
+
     let mut inference_handle = tokio::spawn(run_inference(
         frames,
         Arc::clone(&shared_state),
@@ -168,8 +154,8 @@ async fn main() -> Result<()> {
         "registered on session bus"
     );
 
-    tokio::spawn(emit_signals(conn.clone(), event_tx.subscribe()));
-    tokio::spawn(emit_score_snapshots(conn.clone(), score_tx.subscribe()));
+    tokio::spawn(emit_signals(conn.clone(), events_rx));
+    tokio::spawn(emit_score_snapshots(conn.clone(), scores_rx));
 
     loop {
         tokio::select! {
@@ -233,7 +219,7 @@ async fn swap_device(
 
     {
         let mut s = shared_state.lock().await;
-        s.config.engine.device = name.to_owned();
+        name.clone_into(&mut s.config.engine.device);
     }
     if persist {
         let path = {
@@ -256,7 +242,9 @@ async fn run_inference(
     let mut last_snapshot: Option<Instant> = None;
     while let Some(frame) = frames.recv().await {
         let mut s = shared.lock().await;
+        let started = Instant::now();
         let result = tokio::task::block_in_place(|| s.pipeline.process(&frame));
+        let elapsed = started.elapsed();
         let scores = match result {
             Ok(scores) => scores,
             Err(err) => {
@@ -264,7 +252,7 @@ async fn run_inference(
                 continue;
             }
         };
-        stats.record_score();
+        stats.record_score(elapsed);
 
         let now = Instant::now();
         let snapshot_due = last_snapshot
@@ -364,12 +352,15 @@ async fn log_stats(
     tick.tick().await;
     loop {
         tick.tick().await;
-        tracing::debug!(
+        tracing::info!(
             audio_fps = format_args!("{:.2}", audio.audio_fps()),
             score_fps = format_args!("{:.2}", inference.score_fps()),
             audio_emitted = audio.frames_emitted(),
             audio_dropped = audio.frames_dropped(),
             scores = inference.scores_emitted(),
+            mean_latency_us = inference.mean_latency_us(),
+            max_latency_us = inference.max_latency_us(),
+            last_latency_us = inference.last_latency_us(),
             "stats"
         );
     }

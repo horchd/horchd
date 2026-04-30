@@ -1,9 +1,11 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;
 use horchd_core::DaemonProxy;
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -18,11 +20,11 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Print daemon health (running, audio fps, score fps, loaded wakewords).
+    /// Print daemon health (running, audio fps, score fps, mic level, loaded wakewords).
     Status,
     /// List configured wakewords as a table.
     List,
-    /// Subscribe to the `Detected` signal and print one line per fire.
+    /// Subscribe to the `Detected` signal and print one line per fire. Reconnects on daemon restart.
     Monitor,
 
     /// Set a wakeword's threshold. Transient by default; pass `--save` to persist to TOML.
@@ -35,15 +37,7 @@ enum Command {
     Disable(NameOnly),
 
     /// Register a new wakeword. Validates the model and persists to TOML.
-    Add {
-        name: String,
-        #[arg(long)]
-        model: PathBuf,
-        #[arg(long, default_value_t = 0.5)]
-        threshold: f64,
-        #[arg(long, default_value_t = 1500)]
-        cooldown: u32,
-    },
+    Add(AddArgs),
     /// Remove a wakeword. The on-disk model file is preserved unless `--purge`.
     Remove {
         name: String,
@@ -61,6 +55,18 @@ enum Command {
 }
 
 #[derive(Debug, Args)]
+struct AddArgs {
+    /// ASCII letters / digits / `_` / `-` only.
+    name: String,
+    #[arg(long)]
+    model: PathBuf,
+    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_THRESHOLD)]
+    threshold: f64,
+    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_COOLDOWN_MS)]
+    cooldown: u32,
+}
+
+#[derive(Debug, Args)]
 struct PretrainedArgs {
     /// Pretrained model name (e.g. `hey_jarvis_v0.1`). Omit when using `--list`.
     name: Option<String>,
@@ -71,10 +77,10 @@ struct PretrainedArgs {
     #[arg(long = "as", value_name = "ALIAS")]
     register_as: Option<String>,
     /// Initial threshold.
-    #[arg(long, default_value_t = 0.5)]
+    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_THRESHOLD)]
     threshold: f64,
     /// Initial cooldown in milliseconds.
-    #[arg(long, default_value_t = 1500)]
+    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_COOLDOWN_MS)]
     cooldown: u32,
     /// Re-download even if the file already exists locally.
     #[arg(long)]
@@ -83,9 +89,8 @@ struct PretrainedArgs {
 
 #[derive(Debug, Args)]
 struct ThresholdArgs {
-    /// Wakeword name as defined in the config.
     name: String,
-    /// New threshold value (typically in `[0, 1]`).
+    /// New threshold value, range `(0, 1]`.
     value: f64,
     /// Persist the change back to `config.toml` (preserves comments).
     #[arg(long)]
@@ -94,9 +99,8 @@ struct ThresholdArgs {
 
 #[derive(Debug, Args)]
 struct CooldownArgs {
-    /// Wakeword name as defined in the config.
     name: String,
-    /// New cooldown in milliseconds.
+    /// New cooldown in milliseconds, capped at 60_000.
     value: u32,
     /// Persist the change back to `config.toml` (preserves comments).
     #[arg(long)]
@@ -105,7 +109,6 @@ struct CooldownArgs {
 
 #[derive(Debug, Args)]
 struct NameOnly {
-    /// Wakeword name as defined in the config.
     name: String,
     /// Persist the change back to `config.toml`.
     #[arg(long)]
@@ -115,6 +118,15 @@ struct NameOnly {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // import-pretrained --list and the like don't need the daemon.
+    if let Command::ImportPretrained(args) = &cli.command
+        && args.list
+    {
+        print_catalogue();
+        return Ok(());
+    }
+
     let conn = zbus::Connection::session()
         .await
         .context("connecting to the D-Bus session bus")?;
@@ -127,6 +139,7 @@ async fn main() -> Result<()> {
         Command::List => list(&proxy).await,
         Command::Monitor => monitor(&proxy).await,
         Command::Threshold(args) => {
+            validate_threshold(args.value)?;
             proxy
                 .set_threshold(&args.name, args.value, args.save)
                 .await
@@ -135,6 +148,7 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Cooldown(args) => {
+            validate_cooldown(args.value)?;
             proxy
                 .set_cooldown(&args.name, args.value, args.save)
                 .await
@@ -158,32 +172,31 @@ async fn main() -> Result<()> {
             println!("{:?} disabled", args.name);
             Ok(())
         }
-        Command::Add {
-            name,
-            model,
-            threshold,
-            cooldown,
-        } => {
-            let model_str = model
+        Command::Add(args) => {
+            validate_name(&args.name)?;
+            validate_threshold(args.threshold)?;
+            validate_cooldown(args.cooldown)?;
+            let model_str = args
+                .model
                 .to_str()
                 .context("model path is not valid UTF-8")?
                 .to_owned();
             proxy
-                .add(&name, &model_str, threshold, cooldown)
+                .add(&args.name, &model_str, args.threshold, args.cooldown)
                 .await
-                .with_context(|| format!("Add({name:?}, {model_str:?})"))?;
-            println!("added wakeword {name:?} (model {model_str})");
+                .with_context(|| format!("Add({:?}, {model_str:?})", args.name))?;
+            println!("added wakeword {:?} (model {})", args.name, model_str);
             Ok(())
         }
         Command::Remove { name, purge } => {
-            // Snapshot before we remove so we know the on-disk model path.
             let model_path = if purge {
-                proxy.list_wakewords().await.ok().and_then(|wakes| {
-                    wakes
-                        .into_iter()
-                        .find(|(n, ..)| n == &name)
-                        .map(|(_, _, m, _, _)| m)
-                })
+                proxy
+                    .list_wakewords()
+                    .await
+                    .context("ListWakewords (for --purge)")?
+                    .into_iter()
+                    .find(|(n, ..)| n == &name)
+                    .map(|(_, _, m, _, _)| m)
             } else {
                 None
             };
@@ -206,8 +219,7 @@ async fn main() -> Result<()> {
     }
 }
 
-const PRETRAINED_BASE: &str =
-    "https://raw.githubusercontent.com/dscripka/openWakeWord/main/openwakeword/resources/models";
+const PRETRAINED_BASE: &str = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1";
 
 const PRETRAINED_CATALOGUE: &[(&str, &str)] = &[
     ("alexa_v0.1", "Alexa"),
@@ -218,28 +230,35 @@ const PRETRAINED_CATALOGUE: &[(&str, &str)] = &[
     ("weather_v0.1", "Weather"),
 ];
 
-async fn import_pretrained(proxy: &DaemonProxy<'_>, args: PretrainedArgs) -> Result<()> {
-    if args.list {
-        println!("Upstream openWakeWord pretrained models");
-        println!("---------------------------------------");
-        let name_w = PRETRAINED_CATALOGUE
-            .iter()
-            .map(|(n, _)| n.len())
-            .max()
-            .unwrap_or(20);
-        for (name, descr) in PRETRAINED_CATALOGUE {
-            println!("  {name:<name_w$}  {descr}");
-        }
-        println!("\nUsage:  horchctl import-pretrained <name> [--as alias] [--threshold 0.5]");
-        return Ok(());
-    }
+/// Maximum bytes we accept from the upstream download — defends against
+/// hostile redirects or upstream bugs filling `~/.local/share`.
+const MAX_DOWNLOAD_BYTES: u64 = 50 * 1024 * 1024;
 
+fn print_catalogue() {
+    println!("Upstream openWakeWord pretrained models");
+    println!("---------------------------------------");
+    let name_w = PRETRAINED_CATALOGUE
+        .iter()
+        .map(|(n, _)| n.len())
+        .max()
+        .unwrap_or(20);
+    for (entry, descr) in PRETRAINED_CATALOGUE {
+        println!("  {entry:<name_w$}  {descr}");
+    }
+    println!("\nUsage:  horchctl import-pretrained <name> [--as alias] [--threshold 0.5]");
+}
+
+async fn import_pretrained(proxy: &DaemonProxy<'_>, args: PretrainedArgs) -> Result<()> {
     let name = args.name.ok_or_else(|| {
         anyhow::anyhow!("missing model name; try `horchctl import-pretrained --list`")
     })?;
     if !PRETRAINED_CATALOGUE.iter().any(|(n, _)| *n == name) {
         bail!("{name:?} is not in the pretrained catalogue; run `--list` to see options");
     }
+    let register_as = args.register_as.clone().unwrap_or_else(|| name.clone());
+    validate_name(&register_as)?;
+    validate_threshold(args.threshold)?;
+    validate_cooldown(args.cooldown)?;
 
     let dest_dir = models_dir()?;
     std::fs::create_dir_all(&dest_dir)
@@ -252,17 +271,21 @@ async fn import_pretrained(proxy: &DaemonProxy<'_>, args: PretrainedArgs) -> Res
             dest.display()
         );
     } else {
-        download(&format!("{PRETRAINED_BASE}/{name}.onnx"), &dest)?;
+        let url = format!("{PRETRAINED_BASE}/{name}.onnx");
+        let digest = download(&url, &dest).await?;
         println!("downloaded → {}", dest.display());
+        println!("sha256:    {digest}");
     }
 
-    let register_as = args.register_as.unwrap_or_else(|| name.clone());
     let model_str = dest.to_string_lossy().into_owned();
     proxy
         .add(&register_as, &model_str, args.threshold, args.cooldown)
         .await
         .with_context(|| format!("Add({register_as:?}, {model_str:?})"))?;
-    println!("registered wakeword {register_as:?} (model {name})");
+    println!(
+        "registered wakeword {register_as:?} (model {})",
+        dest.display()
+    );
     Ok(())
 }
 
@@ -278,25 +301,67 @@ fn models_dir() -> Result<PathBuf> {
     Ok(base.join("horchd").join("models"))
 }
 
-fn download(url: &str, dest: &std::path::Path) -> Result<()> {
-    use std::process::Command;
-    let status = Command::new("curl")
-        .args([
-            "-fL", // fail on HTTP error, follow redirects
-            "--retry",
-            "3",
-            "--connect-timeout",
-            "10",
-            "-o",
-        ])
-        .arg(dest)
-        .arg(url)
-        .status()
-        .with_context(|| "spawning curl (is curl installed?)")?;
-    if !status.success() {
-        bail!("curl exited with {status} fetching {url}");
+/// Streaming HTTPS download via reqwest+rustls with a hard size cap and
+/// a SHA-256 digest of what was actually written to disk. Returns the
+/// hex digest so the caller can echo it for manual verification.
+async fn download(url: &str, dest: &std::path::Path) -> Result<String> {
+    use std::io::Write as _;
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(120))
+        .build()
+        .context("building HTTP client")?;
+    let resp = client
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("GET {url}"))?
+        .error_for_status()
+        .with_context(|| format!("HTTP error fetching {url}"))?;
+
+    if let Some(len) = resp.content_length()
+        && len > MAX_DOWNLOAD_BYTES
+    {
+        bail!(
+            "{url}: refusing {len}-byte download (cap is {MAX_DOWNLOAD_BYTES}); the URL likely points at the wrong asset",
+        );
     }
-    Ok(())
+
+    let tmp = dest.with_extension("onnx.part");
+    let mut file =
+        std::fs::File::create(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+    let mut hasher = Sha256::new();
+    let mut total: u64 = 0;
+    let mut stream = resp.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.with_context(|| format!("reading body chunk from {url}"))?;
+        total = total.saturating_add(chunk.len() as u64);
+        if total > MAX_DOWNLOAD_BYTES {
+            let _ = std::fs::remove_file(&tmp);
+            bail!("{url}: download exceeded {MAX_DOWNLOAD_BYTES} bytes; aborting");
+        }
+        hasher.update(&chunk);
+        file.write_all(&chunk)
+            .with_context(|| format!("writing {}", tmp.display()))?;
+    }
+    file.sync_all().ok();
+    drop(file);
+
+    std::fs::rename(&tmp, dest)
+        .with_context(|| format!("renaming {} → {}", tmp.display(), dest.display()))?;
+
+    let digest = hasher.finalize();
+    Ok(hex(&digest))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        let _ = write!(&mut s, "{b:02x}");
+    }
+    s
 }
 
 fn purge_model(model_path: &str) -> Result<()> {
@@ -312,6 +377,39 @@ fn purge_model(model_path: &str) -> Result<()> {
         std::fs::remove_file(&sidecar)
             .with_context(|| format!("deleting sidecar {}", sidecar.display()))?;
         println!("purged sidecar {}", sidecar.display());
+    }
+    Ok(())
+}
+
+fn validate_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        bail!("wakeword name must not be empty");
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        bail!("wakeword name {name:?} must only use ASCII letters, digits, '_' or '-'");
+    }
+    if name.starts_with('-') {
+        bail!("wakeword name must not start with '-'");
+    }
+    Ok(())
+}
+
+fn validate_threshold(value: f64) -> Result<()> {
+    if !(value > 0.0 && value <= 1.0) {
+        bail!("threshold must be in (0, 1]; got {value}");
+    }
+    Ok(())
+}
+
+fn validate_cooldown(value: u32) -> Result<()> {
+    if value > horchd_core::MAX_COOLDOWN_MS {
+        bail!(
+            "cooldown_ms must be ≤ {} (got {value})",
+            horchd_core::MAX_COOLDOWN_MS
+        );
     }
     Ok(())
 }
@@ -347,13 +445,13 @@ async fn list(proxy: &DaemonProxy<'_>) -> Result<()> {
         return Ok(());
     }
 
-    let name_w = wakes
+    let name_col = wakes
         .iter()
         .map(|(n, ..)| n.len())
         .max()
         .unwrap_or(4)
         .max(4);
-    let model_w = wakes
+    let model_col = wakes
         .iter()
         .map(|(_, _, m, _, _)| m.len())
         .max()
@@ -361,44 +459,73 @@ async fn list(proxy: &DaemonProxy<'_>) -> Result<()> {
         .max(5);
 
     println!(
-        "{:<name_w$}  {:<7}  {:<9}  {:<8}  {:<model_w$}",
+        "{:<name_col$}  {:<7}  {:<9}  {:<8}  {:<model_col$}",
         "NAME", "ENABLED", "THRESHOLD", "COOLDOWN", "MODEL"
     );
     for (name, threshold, model, enabled, cooldown_ms) in wakes {
         let on = if enabled { "yes" } else { "no" };
         println!(
-            "{name:<name_w$}  {on:<7}  {threshold:<9.3}  {ms:<8}  {model:<model_w$}",
+            "{name:<name_col$}  {on:<7}  {threshold:<9.3}  {ms:<8}  {model:<model_col$}",
             ms = format!("{cooldown_ms} ms")
         );
     }
     Ok(())
 }
 
+/// Subscribe to `Detected`. Logs and continues on malformed payloads.
+/// Reconnects with exponential backoff (capped) when the daemon goes
+/// away — so `horchctl monitor` can sit running while the user
+/// `systemctl --user restart horchd`.
 async fn monitor(proxy: &DaemonProxy<'_>) -> Result<()> {
-    let mut stream = proxy
-        .receive_detected()
-        .await
-        .context("subscribing to Detected signal")?;
     eprintln!("subscribed to xyz.horchd.Daemon1.Detected — press Ctrl-C to exit");
+    let mut backoff = Duration::from_millis(500);
+    let max_backoff = Duration::from_secs(10);
 
     loop {
+        match monitor_once(proxy).await {
+            Ok(()) => {
+                eprintln!(
+                    "signal stream closed; reconnecting in {:.1}s",
+                    backoff.as_secs_f64()
+                );
+            }
+            Err(err) => {
+                eprintln!(
+                    "monitor error: {err:#}; retrying in {:.1}s",
+                    backoff.as_secs_f64()
+                );
+            }
+        }
         tokio::select! {
             biased;
             _ = tokio::signal::ctrl_c() => {
                 eprintln!();
                 return Ok(());
             }
+            _ = tokio::time::sleep(backoff) => {
+                backoff = (backoff * 2).min(max_backoff);
+            }
+        }
+    }
+}
+
+async fn monitor_once(proxy: &DaemonProxy<'_>) -> Result<()> {
+    let mut stream = proxy
+        .receive_detected()
+        .await
+        .context("subscribing to Detected signal")?;
+    loop {
+        tokio::select! {
+            biased;
+            _ = tokio::signal::ctrl_c() => return Ok(()),
             sig = stream.next() => {
-                let Some(sig) = sig else {
-                    eprintln!("signal stream closed");
-                    return Ok(());
-                };
+                let Some(sig) = sig else { return Ok(()); };
                 match sig.args() {
                     Ok(args) => println!(
                         "{:<10.6}  {:<24}  ts={}",
                         args.score, args.name, args.timestamp_us,
                     ),
-                    Err(err) => bail!("malformed Detected signal: {err}"),
+                    Err(err) => eprintln!("warning: malformed Detected signal: {err}"),
                 }
             }
         }

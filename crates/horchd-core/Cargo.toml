@@ -2,15 +2,19 @@
 name = "horchd-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Shared types & D-Bus interface definitions for the horchd ecosystem"
 
+[lints]
+workspace = true
+
 [dependencies]
-serde = { version = "1.0.228", features = ["derive"] }
-shellexpand = "3.1.2"
-thiserror = "2.0.18"
-toml = "1.1.2"
-zbus = "5.14.0"
+serde.workspace = true
+shellexpand.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+zbus.workspace = true

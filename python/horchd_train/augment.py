@@ -1,9 +1,8 @@
 """Audiomentations wrapper.
 
 Reads every WAV in `src_dir`, applies a randomised augmentation chain
-`per_file` times, writes the results into `dst_dir`. Mirrors Lyna's
-augmentation profile (gain, pitch, time-stretch, room reverb, noise) so
-trained models see the same input distribution.
+`per_file` times, writes the results into `dst_dir`. Standard
+augmentation profile (gain, pitch, time-stretch, room reverb, noise).
 """
 
 from __future__ import annotations

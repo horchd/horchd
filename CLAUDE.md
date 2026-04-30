@@ -44,33 +44,28 @@ Cargo workspace monorepo with these crates:
 | Domain | `horchd.xyz` |
 | License | `MIT OR Apache-2.0` (both LICENSE files at repo root) |
 | Rust edition | `2024` |
-| Models directory | `~/.local/share/horchd/models/` only — no system-wide path, no Lyna auto-discovery |
+| Models directory | `~/.local/share/horchd/models/` only — no system-wide path, no auto-discovery |
 | Service type | systemd **user** unit |
 | D-Bus bus | session bus |
 | D-Bus service name | `xyz.horchd.Daemon` |
 | D-Bus object path | `/xyz/horchd/Daemon` |
 | D-Bus interface | `xyz.horchd.Daemon1` |
+| `GetStatus` return tuple | `(bddd)` — running, audio_fps, score_fps, mic_level |
 | Initial commit message | `Batman` (no body, no trailers — by user request) |
 
 ## Reference material outside this repo
 
-The openWakeWord Python implementation is the spec we are porting. Read
-these files when you need to verify behavior:
+The openWakeWord Python implementation is the spec we are porting. The
+upstream source is at <https://github.com/dscripka/openWakeWord>; the
+files to consult when verifying inference behavior are
+`openwakeword/model.py` and `openwakeword/utils.py`.
 
-```
-/home/newt/Dokumente/Projects/Personal/Lyna/server/.venv/lib/python3.11/site-packages/openwakeword/model.py
-/home/newt/Dokumente/Projects/Personal/Lyna/server/.venv/lib/python3.11/site-packages/openwakeword/utils.py
-```
-
-The universal preprocessing models (`melspectrogram.onnx`, `embedding_model.onnx`)
-live in:
-
-```
-/home/newt/Dokumente/Projects/Personal/Lyna/server/.venv/lib/python3.11/site-packages/openwakeword/resources/models/
-```
-
-Copy them into `shared-models/` in this repo on first build (the install
-script handles this).
+The universal preprocessing models (`melspectrogram.onnx`,
+`embedding_model.onnx`) ship inside the upstream package under
+`openwakeword/resources/models/`. `install.sh` copies them into
+`/usr/local/share/horchd/`; for development, drop them into
+`shared-models/` (gitignored) — see the `oww=$(python -c ...)` snippet
+in the README.
 
 ## Pipeline shape (memorize this)
 

@@ -24,13 +24,12 @@
     ],
     "trayIcon": {
       "iconPath": "icons/tray.png",
-      "iconAsTemplate": true,
       "menuOnLeftClick": false
     },
     "security": {
-      "csp": null
+      "csp": "default-src 'self' tauri: ipc: http://ipc.localhost; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: tauri: asset: http://asset.localhost; media-src 'self' data: blob: tauri: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost ws://localhost:5173; font-src 'self' data:; worker-src 'self' blob:"
     },
-    "withGlobalTauri": true
+    "withGlobalTauri": false
   },
   "bundle": {
     "active": true,

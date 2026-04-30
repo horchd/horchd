@@ -2,30 +2,51 @@
 name = "horchd"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Native multi-wakeword detection daemon with D-Bus event broadcasting"
 
+[lints]
+workspace = true
+
 [dependencies]
-anyhow = "1.0.102"
-clap = { version = "4.6.1", features = ["derive"] }
+anyhow.workspace = true
+clap.workspace = true
 cpal = "0.17.3"
 horchd-core = { version = "0.1.0", path = "../horchd-core" }
 libc = "0.2.186"
 ndarray = "0.17.2"
 ort = { version = "2.0.0-rc.12", features = ["download-binaries"] }
-serde = { version = "1.0.228", features = ["derive"] }
-shellexpand = "3.1.2"
-thiserror = "2.0.18"
-tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread", "sync", "signal", "time"] }
-toml = "1.1.2"
+serde.workspace = true
+shellexpand.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "signal", "time"] }
+toml.workspace = true
 toml_edit = "0.25.11"
-tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-zbus = "5.14.0"
+tracing.workspace = true
+tracing-subscriber.workspace = true
+zbus.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.7", features = ["html_reports"] }
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+
+[lib]
+name = "horchd"
+path = "src/lib.rs"
 
 [[bin]]
 name = "horchd"
 path = "src/main.rs"
+
+[[bench]]
+name = "detector"
+harness = false
+
+[[bench]]
+name = "audio_callback"
+harness = false

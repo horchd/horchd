@@ -9,7 +9,7 @@ pub mod dbus;
 pub mod error;
 pub mod event;
 
-pub use config::{Config, Engine, SharedModels, Wakeword};
+pub use config::{Config, Engine, MAX_COOLDOWN_MS, SharedModels, Wakeword};
 pub use dbus::{DaemonProxy, WakewordSnapshot};
 pub use error::{Error, Result};
 pub use event::WakewordEvent;

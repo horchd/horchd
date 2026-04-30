@@ -1,10 +1,10 @@
 // 16 kHz mono int16 PCM capture via WebAudio + AudioWorklet.
 //
-// Mirrors Lyna's approach: AudioContext({ sampleRate: 16000 }) feeds a
-// MediaStreamSource into the pcm-encoder worklet, which posts 80 ms
-// frames as ArrayBuffer chunks. Subscribers get a live `peak` reading
-// for the meter and the raw PCM frames; `recordFixed` collects exactly
-// `durationMs` worth of samples and returns them as one Int16Array.
+// AudioContext({ sampleRate: 16000 }) feeds a MediaStreamSource into
+// the pcm-encoder worklet, which posts 80 ms frames as ArrayBuffer
+// chunks. Subscribers get a live `peak` reading for the meter and the
+// raw PCM frames; `recordFixed` collects exactly `durationMs` worth of
+// samples and returns them as one Int16Array.
 
 const SAMPLE_RATE = 16_000;
 const FRAME_SAMPLES = 1280; // 80 ms @ 16 kHz
@@ -41,6 +41,18 @@ export async function openRecorder(): Promise<Recorder> {
     ac = new AudioContext({ sampleRate: SAMPLE_RATE, latencyHint: "interactive" });
   } catch {
     ac = new AudioContext({ latencyHint: "interactive" });
+  }
+  // Some browsers (notably Firefox) ignore the requested sampleRate and
+  // open the context at the hardware rate. We REFUSE to record at the
+  // wrong rate — silently producing 44.1 kHz "16 kHz" PCM would corrupt
+  // the training corpus invisibly. Caller must hard-fail on this.
+  if (Math.abs(ac.sampleRate - SAMPLE_RATE) > 0.5) {
+    stream.getTracks().forEach((t) => t.stop());
+    await ac.close().catch(() => undefined);
+    throw new Error(
+      `audio context opened at ${ac.sampleRate} Hz; horchd needs exactly ${SAMPLE_RATE} Hz. ` +
+        "Try a different mic, or use Chromium-based browsers which honor the requested rate.",
+    );
   }
   await ac.audioWorklet.addModule("/audio-worklets/pcm-encoder.js");
 
