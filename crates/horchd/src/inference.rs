@@ -212,13 +212,13 @@ impl Preprocessor {
 /// score in `[0, 1]`.
 pub struct Classifier {
     pub name: String,
+    /// When `false`, `score()` short-circuits before ONNX runs.
+    pub enabled: bool,
     session: Session,
-    /// Pre-allocated reusable input tensor — the shape is fixed, so we
-    /// avoid allocating ~6 KB per frame.
+    /// Pre-allocated reusable input tensor — fixed shape, no per-frame heap.
     scratch: Array3<f32>,
-    /// Number of inputs we've scored so far. The first
-    /// `COLD_START_ZEROED_FRAMES` are clamped to 0.0 to avoid spurious
-    /// detections from the zero-padded warm-up window.
+    /// First `COLD_START_ZEROED_FRAMES` outputs clamp to 0.0 (matches
+    /// upstream openwakeword/model.py L330-333).
     frames_seen: u64,
 }
 
@@ -229,6 +229,7 @@ impl Classifier {
         validate_classifier_shape(&session, &name, model_path)?;
         Ok(Self {
             name,
+            enabled: true,
             session,
             scratch: Array3::<f32>::zeros((1, CLASSIFIER_WINDOW, EMBEDDING_DIM)),
             frames_seen: 0,
@@ -238,6 +239,9 @@ impl Classifier {
     /// Score the supplied window. Caller guarantees it is filled in
     /// chronological order with the most recent embedding last.
     pub fn score(&mut self, window: &[[f32; EMBEDDING_DIM]; CLASSIFIER_WINDOW]) -> Result<f32> {
+        if !self.enabled {
+            return Ok(0.0);
+        }
         for (t, frame) in window.iter().enumerate() {
             for d in 0..EMBEDDING_DIM {
                 self.scratch[(0, t, d)] = frame[d];
@@ -439,6 +443,17 @@ impl InferencePipeline {
         let len_before = self.classifiers.len();
         self.classifiers.retain(|c| c.name != name);
         self.classifiers.len() != len_before
+    }
+
+    /// Toggle the per-wakeword classifier's `enabled` flag. Returns
+    /// `false` if no classifier with that name is loaded.
+    pub fn set_classifier_enabled(&mut self, name: &str, enabled: bool) -> bool {
+        if let Some(clf) = self.classifiers.iter_mut().find(|c| c.name == name) {
+            clf.enabled = enabled;
+            true
+        } else {
+            false
+        }
     }
 }
 

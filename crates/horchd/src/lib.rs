@@ -36,9 +36,3 @@ pub mod detector_for_bench {
 pub mod audio_for_bench {
     pub use crate::audio::{AudioStats, CallbackState, FRAME_SAMPLES, Frame, TARGET_SAMPLE_RATE};
 }
-
-#[cfg(test)]
-mod _autogen_test_impl {
-    // Anchor for `cargo test --lib` so test-only helpers don't
-    // accidentally get pruned by future refactors.
-}

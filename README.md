@@ -83,11 +83,10 @@ is bounded by `ort` and the bundled openWakeWord models — measured live
 via the daemon's `mean_latency_us` / `max_latency_us` counters and
 exposed in the `stats` log line every 30 s.
 
-![horchd hot-path latency](https://quickchart.io/chart?c=%7B%22type%22%3A%22bar%22%2C%22data%22%3A%7B%22labels%22%3A%5B%22Detector+disabled%22%2C%22Detector+update%22%2C%22callback+mono+1280%22%2C%22callback+stereo+3840+d%3D3%22%5D%2C%22datasets%22%3A%5B%7B%22label%22%3A%22microseconds%22%2C%22data%22%3A%5B0.00106%2C0.00643%2C2.85%2C8.34%5D%2C%22backgroundColor%22%3A%22%23c8311c%22%2C%22borderColor%22%3A%22%231a1a1a%22%2C%22borderWidth%22%3A1%7D%5D%7D%2C%22options%22%3A%7B%22indexAxis%22%3A%22y%22%2C%22plugins%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22horchd+hot-path+latency+%28microseconds%2C+log+scale%2C+lower+is+better%29%22%2C%22color%22%3A%22%231a1a1a%22%2C%22font%22%3A%7B%22size%22%3A16%7D%7D%2C%22legend%22%3A%7B%22display%22%3Afalse%7D%7D%2C%22scales%22%3A%7B%22x%22%3A%7B%22type%22%3A%22logarithmic%22%2C%22min%22%3A0.001%2C%22max%22%3A30%2C%22ticks%22%3A%7B%22color%22%3A%22%231a1a1a%22%7D%2C%22grid%22%3A%7B%22color%22%3A%22%23e8e4d6%22%7D%2C%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22microseconds+%28log+scale%29%22%2C%22color%22%3A%22%231a1a1a%22%7D%7D%2C%22y%22%3A%7B%22ticks%22%3A%7B%22color%22%3A%22%231a1a1a%22%7D%2C%22grid%22%3A%7B%22display%22%3Afalse%7D%7D%7D%7D%7D&bkg=%23fafaf6&w=880&h=340&v=4)
+![horchd hot-path latency](https://quickchart.io/chart?c=%7B%22type%22%3A%22bar%22%2C%22data%22%3A%7B%22labels%22%3A%5B%22Detector+update%22%2C%22callback+mono+1280%22%2C%22callback+stereo+3840+d%3D3%22%5D%2C%22datasets%22%3A%5B%7B%22label%22%3A%22microseconds%22%2C%22data%22%3A%5B0.00643%2C2.85%2C8.34%5D%2C%22backgroundColor%22%3A%22%23c8311c%22%2C%22borderColor%22%3A%22%231a1a1a%22%2C%22borderWidth%22%3A1%7D%5D%7D%2C%22options%22%3A%7B%22indexAxis%22%3A%22y%22%2C%22plugins%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22horchd+hot-path+latency+%28microseconds%2C+log+scale%2C+lower+is+better%29%22%2C%22color%22%3A%22%231a1a1a%22%2C%22font%22%3A%7B%22size%22%3A16%7D%7D%2C%22legend%22%3A%7B%22display%22%3Afalse%7D%7D%2C%22scales%22%3A%7B%22x%22%3A%7B%22type%22%3A%22logarithmic%22%2C%22min%22%3A0.001%2C%22max%22%3A30%2C%22ticks%22%3A%7B%22color%22%3A%22%231a1a1a%22%7D%2C%22grid%22%3A%7B%22color%22%3A%22%23e8e4d6%22%7D%2C%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22microseconds+%28log+scale%29%22%2C%22color%22%3A%22%231a1a1a%22%7D%7D%2C%22y%22%3A%7B%22ticks%22%3A%7B%22color%22%3A%22%231a1a1a%22%7D%2C%22grid%22%3A%7B%22display%22%3Afalse%7D%7D%7D%7D%7D&bkg=%23fafaf6&w=880&h=300&v=4)
 
 | Path                                  |  Latency  | Cost @ 12.5 fps |
 | ------------------------------------- | --------: | --------------: |
-| `Detector::update` (disabled)         |   1.06 ns |        0.000 %  |
 | `Detector::update` (steady-state)     |   6.43 ns |        0.000 %  |
 | audio callback · mono · 1280 samples  |   2.85 µs |        0.004 %  |
 | audio callback · stereo · 3840 (d=3)  |   8.34 µs |        0.010 %  |
@@ -97,6 +96,31 @@ Real-world budget at the daemon's 12.5 fps frame rate:
 ~13 ns/frame for every detector. The remaining cycles all go to ONNX
 runtime; the README's "≈1 % CPU at idle" claim is set by the inference
 stack, not the Rust glue.
+
+#### Why CPU and not GPU
+
+The classifier `.onnx`s are tiny (~80 KB each, plus 1.5 MB of shared
+melspec + embedding) and the workload is one inference per 80 ms frame.
+At that rate, GPU upload latency (host → device memory) is comparable
+to the actual compute, so the CPU execution provider wins on
+end-to-end wall clock. It's also free of hard runtime dependencies —
+no CUDA / ROCm / TensorRT — and keeps the binary at ~29 MB instead
+of hundreds. If you need to feed dozens of wakewords on the same
+frame and a GPU is available, swap `ort`'s `download-binaries` feature
+for `cuda` and configure the session via the matching execution
+provider — none of the rest of the pipeline cares.
+
+#### What `horchctl disable <wake>` actually skips
+
+Wakeword inference fans out at the embedding stage: melspec + embedding
+run **once per frame**, then each per-wakeword classifier runs
+independently. `disable` flips the classifier's `enabled` flag, which
+short-circuits `Classifier::score` before the ONNX `Session::run` call —
+i.e. the disabled wakeword pays the (cheap) shared melspec + embedding
+cost but skips the (~all of it) per-classifier inference. So a daemon
+with 5 wakewords where 4 are disabled costs roughly the same as a
+daemon with one wakeword. To stop paying even the shared cost, remove
+the wakeword entirely (`horchctl remove <wake>`).
 
 Numbers above were measured on:
 

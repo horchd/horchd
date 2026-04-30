@@ -266,6 +266,7 @@ impl Daemon {
         if let Some(w) = s.wakeword_config_mut(name) {
             w.enabled = enabled;
         }
+        s.pipeline.set_classifier_enabled(name, enabled);
         if persist_to_disk {
             persist::set_enabled(&s.config_path, name, enabled)
                 .map_err(|e| failed(format!("{e:#}")))?;
@@ -453,12 +454,13 @@ fn apply_reload_plan(
             d.cooldown = std::time::Duration::from_millis(u64::from(w.cooldown_ms));
             d.enabled = w.enabled;
         }
+        state.pipeline.set_classifier_enabled(&w.name, w.enabled);
     }
     for w in plan.model_changed.iter().chain(plan.added.iter()) {
         // `loaded` is in (added ++ model_changed) order from the call
         // site, but we assigned it in the same iteration — pull from the
         // front so name-by-name pairing is preserved.
-        let Some(classifier) = loaded
+        let Some(mut classifier) = loaded
             .iter()
             .position(|c| c.name == w.name)
             .map(|i| loaded.remove(i))
@@ -466,6 +468,7 @@ fn apply_reload_plan(
             tracing::warn!(name = %w.name, "missing classifier in reload plan; skipping");
             continue;
         };
+        classifier.enabled = w.enabled;
         state.pipeline.remove_classifier(&w.name);
         state.pipeline.add_classifier(classifier);
         state.detectors.retain(|d| d.name != w.name);
