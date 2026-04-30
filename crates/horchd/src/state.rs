@@ -9,7 +9,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use horchd_core::Config;
+use horchd_client::Config;
 use tokio::sync::Mutex;
 
 use crate::detector::Detector;
@@ -43,7 +43,7 @@ impl DaemonState {
         self.detectors.iter_mut().find(|d| d.name == name)
     }
 
-    pub fn wakeword_config_mut(&mut self, name: &str) -> Option<&mut horchd_core::Wakeword> {
+    pub fn wakeword_config_mut(&mut self, name: &str) -> Option<&mut horchd_client::Wakeword> {
         self.config.wakewords.iter_mut().find(|w| w.name == name)
     }
 }

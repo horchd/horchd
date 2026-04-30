@@ -30,7 +30,7 @@ Cargo workspace monorepo with these crates:
 
 | Crate | Kind | Purpose |
 | --- | --- | --- |
-| `horchd-core` | lib | Shared types: config schema, D-Bus interface trait, event struct, error type. Zero runtime dependencies on the others. |
+| `horchd-client` | lib | Shared types: config schema, D-Bus interface trait, event struct, error type. Zero runtime dependencies on the others. |
 | `horchd` | bin | The daemon. Owns the audio capture + ONNX inference + D-Bus service. |
 | `horchctl` | bin | CLI client (think `systemctl`). Talks to the daemon over D-Bus. |
 | `horchd-gui` | bin | (Phase 9) Tauri tray + control panel. Talks to the daemon over D-Bus. |

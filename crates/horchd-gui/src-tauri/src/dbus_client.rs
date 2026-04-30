@@ -1,9 +1,9 @@
-//! Thin wrappers around `horchd_core::DaemonProxy`. Each call opens a
+//! Thin wrappers around `horchd_client::DaemonProxy`. Each call opens a
 //! short-lived session-bus connection — D-Bus is cheap and avoiding
 //! shared state keeps the GUI process resilient against daemon restarts.
 
 use anyhow::{Context, Result};
-use horchd_core::DaemonProxy;
+use horchd_client::DaemonProxy;
 
 pub async fn proxy() -> Result<DaemonProxy<'static>> {
     let conn = zbus::Connection::session()

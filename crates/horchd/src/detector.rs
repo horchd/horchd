@@ -7,7 +7,7 @@
 
 use std::time::{Duration, Instant};
 
-use horchd_core::WakewordEvent;
+use horchd_client::WakewordEvent;
 
 pub struct Detector {
     pub name: String,

@@ -16,7 +16,7 @@ workspace = true
 anyhow.workspace = true
 clap.workspace = true
 futures-util.workspace = true
-horchd-core = { version = "0.1.0", path = "../horchd-core" }
+horchd-client = { version = "0.1.0", path = "../horchd-client" }
 reqwest = { version = "0.13.2", default-features = false, features = ["rustls", "stream"] }
 sha2 = "0.10"
 tokio = { workspace = true, features = ["rt", "macros", "signal", "time"] }

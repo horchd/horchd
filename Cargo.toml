@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/horchctl",
     "crates/horchd",
-    "crates/horchd-core",
+    "crates/horchd-client",
     "crates/horchd-gui/src-tauri",
 ]
 

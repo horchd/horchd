@@ -3,7 +3,7 @@
 //! All in-memory state lives in [`DaemonState`] behind a single
 //! `tokio::sync::Mutex`; the inference task and these methods take turns.
 //! Method signatures must stay aligned with the proxy trait in
-//! `horchd_core::dbus`.
+//! `horchd_client::dbus`.
 //!
 //! Heavy work (ONNX `Session` construction, TOML reload + reconcile) is
 //! moved off the runtime thread via `spawn_blocking` and the lock is
@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use horchd_core::{Config, MAX_COOLDOWN_MS, Wakeword, WakewordSnapshot};
+use horchd_client::{Config, MAX_COOLDOWN_MS, Wakeword, WakewordSnapshot};
 use tokio::sync::{mpsc, oneshot};
 use zbus::interface;
 use zbus::object_server::SignalEmitter;
@@ -492,7 +492,7 @@ fn apply_reload_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use horchd_core::{Engine, SharedModels};
+    use horchd_client::{Engine, SharedModels};
 
     fn engine_for_tests() -> Engine {
         Engine {

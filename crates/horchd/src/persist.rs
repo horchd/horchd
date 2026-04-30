@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use horchd_core::Wakeword;
+use horchd_client::Wakeword;
 use toml_edit::{DocumentMut, Item, Table, Value, value as edit_value};
 
 pub fn set_threshold(path: &Path, name: &str, threshold: f64) -> Result<()> {

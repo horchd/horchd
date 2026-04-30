@@ -12,14 +12,29 @@ description = "Native multi-wakeword detection daemon with D-Bus event broadcast
 [lints]
 workspace = true
 
+[features]
+# Default: ship a self-contained binary by statically linking the
+# libonnxruntime that `ort`'s build script downloads. Yields a ~29 MB
+# binary that needs no extra system packages.
+default = ["bundled-onnxruntime"]
+
+# Static-link path. Pick one of these two and not both.
+bundled-onnxruntime = ["ort/download-binaries", "ort/tls-native", "ort/copy-dylibs"]
+
+# Dynamic-link path. The binary drops to ~5–7 MB but requires
+# `libonnxruntime.so` on the runtime system (Arch: `pacman -S onnxruntime`,
+# Debian: ship via package depends). Build with:
+#   cargo build --release --no-default-features --features dynamic-onnxruntime
+dynamic-onnxruntime = ["ort/load-dynamic"]
+
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
 cpal = "0.17.3"
-horchd-core = { version = "0.1.0", path = "../horchd-core" }
+horchd-client = { version = "0.1.0", path = "../horchd-client" }
 libc = "0.2.186"
 ndarray = "0.17.2"
-ort = { version = "2.0.0-rc.12", features = ["download-binaries"] }
+ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "tracing", "api-24"] }
 serde.workspace = true
 shellexpand.workspace = true
 thiserror.workspace = true

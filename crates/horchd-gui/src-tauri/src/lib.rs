@@ -1,7 +1,7 @@
 //! horchd-gui: Tauri 2 tray + control panel.
 //!
 //! All daemon interaction goes through `dbus_client`, which constructs a
-//! [`horchd_core::DaemonProxy`] and exposes async helpers to the Tauri
+//! [`horchd_client::DaemonProxy`] and exposes async helpers to the Tauri
 //! command layer. The frontend (vanilla HTML during the scaffold phase,
 //! SvelteKit once that migration lands) calls these via `tauri.invoke()`
 //! and listens to the `horchd://detected` event for live fires.

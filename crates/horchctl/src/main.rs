@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use clap::{Args, Parser, Subcommand};
 use futures_util::StreamExt;
-use horchd_core::DaemonProxy;
+use horchd_client::DaemonProxy;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Parser)]
@@ -60,9 +60,9 @@ struct AddArgs {
     name: String,
     #[arg(long)]
     model: PathBuf,
-    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_THRESHOLD)]
+    #[arg(long, default_value_t = horchd_client::Wakeword::DEFAULT_THRESHOLD)]
     threshold: f64,
-    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_COOLDOWN_MS)]
+    #[arg(long, default_value_t = horchd_client::Wakeword::DEFAULT_COOLDOWN_MS)]
     cooldown: u32,
 }
 
@@ -77,10 +77,10 @@ struct PretrainedArgs {
     #[arg(long = "as", value_name = "ALIAS")]
     register_as: Option<String>,
     /// Initial threshold.
-    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_THRESHOLD)]
+    #[arg(long, default_value_t = horchd_client::Wakeword::DEFAULT_THRESHOLD)]
     threshold: f64,
     /// Initial cooldown in milliseconds.
-    #[arg(long, default_value_t = horchd_core::Wakeword::DEFAULT_COOLDOWN_MS)]
+    #[arg(long, default_value_t = horchd_client::Wakeword::DEFAULT_COOLDOWN_MS)]
     cooldown: u32,
     /// Re-download even if the file already exists locally.
     #[arg(long)]
@@ -405,10 +405,10 @@ fn validate_threshold(value: f64) -> Result<()> {
 }
 
 fn validate_cooldown(value: u32) -> Result<()> {
-    if value > horchd_core::MAX_COOLDOWN_MS {
+    if value > horchd_client::MAX_COOLDOWN_MS {
         bail!(
             "cooldown_ms must be ≤ {} (got {value})",
-            horchd_core::MAX_COOLDOWN_MS
+            horchd_client::MAX_COOLDOWN_MS
         );
     }
     Ok(())

@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::Parser;
 use horchd::{AudioCmd, audio, detector, inference, persist, service, state};
-use horchd_core::{Config, WakewordEvent};
+use horchd_client::{Config, WakewordEvent};
 use tokio::sync::{broadcast, mpsc};
 use tracing_subscriber::EnvFilter;
 use zbus::Connection;

@@ -26,9 +26,14 @@ you want a native daemon instead of a Python process, and loads any
 
 ## Highlights
 
+- **Daemon-first** — `horchd` is a standalone Linux service; everything
+  else (`horchctl`, `horchd-gui`, your scripts) is an independent D-Bus
+  client. No client is required to run the daemon, no client links
+  against the daemon — they all just speak `xyz.horchd.Daemon1`.
 - **Native** — single Rust 2024 binary; ONNX Runtime as the only big dep
+- **CPU-only inference** — fits on a single core; no CUDA / ROCm / GPU runtime
 - **Multi-wakeword** — N classifiers run on the same audio frame, fan-out at the embedding stage
-- **Cheap** — ~12.5 inferences/sec on a single core, ~1.5 MB shared models + ~80 KB per wakeword
+- **Cheap** — ~12.5 inferences/sec on one core, ~1.5 MB shared models + ~80 KB per wakeword
 - **D-Bus first** — no HTTP listener, no custom socket, no cloud
 - **systemd user unit** — no root, no system-bus policy file
 - **Hot-reload** — edit the TOML, `horchctl reload`, never drops the audio thread
@@ -93,34 +98,8 @@ exposed in the `stats` log line every 30 s.
 
 Real-world budget at the daemon's 12.5 fps frame rate:
 **12.5 × 8.34 µs ≈ 0.01 % of one CPU core for audio capture**, plus
-~13 ns/frame for every detector. The remaining cycles all go to ONNX
-runtime; the README's "≈1 % CPU at idle" claim is set by the inference
-stack, not the Rust glue.
-
-#### Why CPU and not GPU
-
-The classifier `.onnx`s are tiny (~80 KB each, plus 1.5 MB of shared
-melspec + embedding) and the workload is one inference per 80 ms frame.
-At that rate, GPU upload latency (host → device memory) is comparable
-to the actual compute, so the CPU execution provider wins on
-end-to-end wall clock. It's also free of hard runtime dependencies —
-no CUDA / ROCm / TensorRT — and keeps the binary at ~29 MB instead
-of hundreds. If you need to feed dozens of wakewords on the same
-frame and a GPU is available, swap `ort`'s `download-binaries` feature
-for `cuda` and configure the session via the matching execution
-provider — none of the rest of the pipeline cares.
-
-#### What `horchctl disable <wake>` actually skips
-
-Wakeword inference fans out at the embedding stage: melspec + embedding
-run **once per frame**, then each per-wakeword classifier runs
-independently. `disable` flips the classifier's `enabled` flag, which
-short-circuits `Classifier::score` before the ONNX `Session::run` call —
-i.e. the disabled wakeword pays the (cheap) shared melspec + embedding
-cost but skips the (~all of it) per-classifier inference. So a daemon
-with 5 wakewords where 4 are disabled costs roughly the same as a
-daemon with one wakeword. To stop paying even the shared cost, remove
-the wakeword entirely (`horchctl remove <wake>`).
+~13 ns/frame for every detector. Inference runs on the CPU execution
+provider — that's where the rest of the budget goes.
 
 Numbers above were measured on:
 
@@ -131,10 +110,15 @@ Numbers above were measured on:
 
 Release-binary footprint on the same host:
 
-| Binary     | Size    | Notes                                                   |
-| ---------- | ------- | ------------------------------------------------------- |
-| `horchd`   | 28.9 MB | bundles ONNX Runtime via `ort` `download-binaries` feature |
-| `horchctl` | 8.5 MB  | reqwest + rustls (no openssl), clap, zbus, sha2         |
+| Binary                  | Size    | Notes                                                                                                      |
+| ----------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `horchd` (default)      | 28.9 MB | self-contained — `ort` feature `download-binaries` ships libonnxruntime in the binary                      |
+| `horchd` (`dynamic`)    |  5.2 MB | `--no-default-features --features dynamic-onnxruntime`; needs `libonnxruntime.so` on the system at runtime |
+| `horchctl`              |  8.5 MB | reqwest + rustls (no openssl), clap, zbus, sha2                                                            |
+
+For distro packages (Arch / .deb / .rpm) build the dynamic variant and
+add a `Depends: onnxruntime` line; for one-shot `cargo install` the
+default keeps everything in one self-contained binary.
 
 Reproduce on your hardware:
 
@@ -152,7 +136,7 @@ auto-installs `cargo-llvm-cov` on first run.
 ```
 horchd/
 ├── crates/
-│   ├── horchd-core/   shared types + D-Bus proxy trait (consumed by every binary)
+│   ├── horchd-client/   shared types + D-Bus proxy trait (consumed by every binary)
 │   ├── horchd/        the daemon (lib + bin)
 │   ├── horchctl/      CLI client (status, list, monitor, threshold, add, remove, reload, …)
 │   └── horchd-gui/    Tauri 2 tray + control panel (SvelteKit + Tailwind v4)
@@ -224,91 +208,26 @@ horchctl status
 horchctl monitor      # speak "hey jarvis"
 ```
 
-For a custom wakeword you have two options:
+For a custom wakeword you currently have one supported path:
 
-1. **In-app (Train tab in `horchd-gui`)** — record positive + negative
-   takes through the system mic; the GUI subprocesses the bundled
-   `python/horchd_train` package, which augments the takes and trains an
-   [openWakeWord](https://github.com/dscripka/openWakeWord) DNN
-   classifier head against a precomputed negatives feature corpus, then
-   exports `<name>.onnx` and registers it with the daemon.
-
-   The Train tab carries a setup card that handles the rest for you:
-   one click installs an isolated Python venv at
-   `~/.local/share/horchd/python-env/` (uv pulls Python + torch +
-   openwakeword + audiomentations into it), another click downloads the
-   precomputed negatives feature file. The only system-level
-   requirement is [uv](https://docs.astral.sh/uv/) (`curl -LsSf
-   https://astral.sh/uv/install.sh | sh`); everything else lives under
-   `~/.local/share/horchd/`.
-
-2. **External training** — produce an
+1. **External training** — produce an
    [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible
    classifier (input `(1, 16, 96)`, output `(1, 1)`) yourself, drop the
    `.onnx` into `~/.local/share/horchd/models/`, and
-   `horchctl add <name> --model …`.
+   `horchctl add <name> --model …`. Any pipeline that exports a model
+   matching that shape will work; the daemon validates it at register-time.
 
-## horchctl
-
-```bash
-horchctl status                                   # daemon health + loaded wakewords
-horchctl list                                     # tabular view
-horchctl monitor                                  # tail Detected signals live
-
-horchctl threshold jarvis 0.45                    # transient (resets on restart)
-horchctl threshold jarvis 0.45 --save             # persist to config.toml (preserves comments)
-horchctl cooldown  jarvis 1200 --save
-horchctl enable    jarvis --save
-horchctl disable   jarvis --save
-
-horchctl add wetter --model ~/.local/share/horchd/models/wetter.onnx --threshold 0.55
-horchctl remove wetter            # keeps the .onnx on disk
-horchctl remove wetter --purge    # also deletes the .onnx + .onnx.data sibling
-
-horchctl reload                   # re-read config.toml; hot-keep unchanged models
-
-horchctl import-pretrained --list                  # catalogue of upstream openWakeWord models
-horchctl import-pretrained hey_jarvis_v0.1         # download + register in one shot
-horchctl import-pretrained hey_jarvis_v0.1 --as jarvis --threshold 0.65
-```
-
-All mutator commands either error out cleanly (validates shape /
-unique name / cooldown) or echo back what they did. `--save` writes
-through [`toml_edit`](https://crates.io/crates/toml_edit) so user
-comments and ordering survive.
-
-## horchd-gui
-
-A Tauri 2 tray app + control panel for users who'd rather not live in
-the terminal. Talks to the daemon over the same D-Bus surface as
-`horchctl`, no special privileges.
-
-Stack: **SvelteKit** (Svelte 5 runes) + **Tailwind v4** + **@lucide/svelte** +
-**Bun**. Design language: brutalist scientific instrument — warm
-parchment background, ink-black text, one signal-red accent for fires,
-**Fraunces** italic serif for hero numerals and the wordmark, **IBM
-Plex Mono** for everything else, hairline borders instead of rounded
-corners.
-
-```bash
-cd crates/horchd-gui
-
-# Dev: vite dev server + Tauri shell with HMR (auto-spawns both)
-cargo tauri dev
-
-# Production native bundle (.deb / .rpm / .AppImage)
-cargo tauri build
-```
-
-The crate follows the canonical Tauri 2 + SvelteKit layout — frontend
-at `crates/horchd-gui/`, Rust + `tauri.conf.json` at
-`crates/horchd-gui/src-tauri/`. Bootstrap (Linux dev headers + Tauri
-CLI) is in [crates/horchd-gui/README.md](crates/horchd-gui/README.md).
-
-The Wayland workaround for `Gdk Error 71` (NVIDIA + webkit2gtk +
-Wayland) is set automatically inside the binary; nothing to configure.
+The **in-app Train tab in `horchd-gui`** wraps the bundled
+`python/horchd_train` package and the upstream openWakeWord trainer to
+record + augment + fit + export end-to-end, but is **work-in-progress**
+— several stages of the Python pipeline still have known bugs (dtype
+mismatches, label-key handling, `pyroomacoustics` dep). Tracked under
+[roadmap](#roadmap); use external training in the meantime.
 
 ## D-Bus API
+
+The daemon's only contract — anything below (`horchctl`, `horchd-gui`,
+your scripts) is just a client of this surface.
 
 Bus: **session bus**. No system-bus policy, runs as the user.
 
@@ -317,6 +236,12 @@ Service:    xyz.horchd.Daemon
 Object:     /xyz/horchd/Daemon
 Interface:  xyz.horchd.Daemon1
 ```
+
+The trailing `1` in the interface name is D-Bus convention for "version
+1 of this interface" (cf. `org.freedesktop.systemd1.Manager`,
+`org.freedesktop.Tracker3.Endpoint`). Backwards-incompatible changes
+ship as a parallel `Daemon2` so old clients keep working until they
+migrate.
 
 | Method               | Args                                                     | Returns      |
 | -------------------- | -------------------------------------------------------- | ------------ |
@@ -349,16 +274,111 @@ Full reference + introspection output: <https://horchd.github.io/dbus-api>.
 
 ## Subscribers
 
+Anything that speaks D-Bus is a valid subscriber. From the shell:
+
 ```bash
 busctl --user monitor xyz.horchd.Daemon
 gdbus monitor --session --dest xyz.horchd.Daemon --object-path /xyz/horchd/Daemon
 ```
 
-Bash, Python (`dbus-next`), and Rust (`zbus` + `horchd-core`) full
-examples live under [`examples/`](examples/) and at
-<https://horchd.github.io/examples/bash> /
-[`/python`](https://horchd.github.io/examples/python) /
-[`/rust`](https://horchd.github.io/examples/rust).
+### Rust
+
+The [`horchd-client`](crates/horchd-client/) crate ships the zbus proxy
+trait + the on-the-wire types (`Config`, `Wakeword`, `WakewordEvent`,
+`WakewordSnapshot`, …). Every binary in this repo uses it; external
+projects use the same crate.
+
+```rust
+use futures_util::StreamExt;
+use horchd_client::DaemonProxy;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let conn = zbus::Connection::session().await?;
+    let proxy = DaemonProxy::new(&conn).await?;
+
+    // One-shot calls
+    let (running, audio_fps, score_fps, mic_level) = proxy.get_status().await?;
+    println!("daemon running={running}, audio_fps={audio_fps:.1}, mic={mic_level:.2}");
+
+    // Subscribe to the Detected signal stream
+    let mut stream = proxy.receive_detected().await?;
+    while let Some(sig) = stream.next().await {
+        let args = sig.args()?;
+        println!("fired: {} score={:.3}", args.name, args.score);
+    }
+    Ok(())
+}
+```
+
+Bash + Python (`dbus-next`) examples live under [`examples/`](examples/).
+
+## horchctl (optional)
+
+The reference CLI client. Same D-Bus surface, no extra privileges.
+
+```bash
+horchctl status                                   # daemon health + loaded wakewords
+horchctl list                                     # tabular view
+horchctl monitor                                  # tail Detected signals live
+
+horchctl threshold jarvis 0.45                    # transient (resets on restart)
+horchctl threshold jarvis 0.45 --save             # persist to config.toml (preserves comments)
+horchctl cooldown  jarvis 1200 --save
+horchctl enable    jarvis --save
+horchctl disable   jarvis --save
+
+horchctl add wetter --model ~/.local/share/horchd/models/wetter.onnx --threshold 0.55
+horchctl remove wetter            # keeps the .onnx on disk
+horchctl remove wetter --purge    # also deletes the .onnx + .onnx.data sibling
+
+horchctl reload                   # re-read config.toml; hot-keep unchanged models
+
+horchctl import-pretrained --list                  # catalogue of upstream openWakeWord models
+horchctl import-pretrained hey_jarvis_v0.1         # download + register in one shot
+horchctl import-pretrained hey_jarvis_v0.1 --as jarvis --threshold 0.65
+```
+
+All mutator commands either error out cleanly (validates shape /
+unique name / cooldown) or echo back what they did. `--save` writes
+through [`toml_edit`](https://crates.io/crates/toml_edit) so user
+comments and ordering survive.
+
+## horchd-gui (optional)
+
+A Tauri 2 tray app + control panel for users who'd rather not live in
+the terminal. Independent D-Bus client of the daemon — no extra
+privileges, no link against `horchd` or `horchctl`.
+
+Status: **Status / Wakewords / Settings tabs are functional**. The
+**Train tab is work-in-progress** — the recording + storage paths work,
+but the bundled Python trainer (`python/horchd_train`) still has known
+bugs that prevent end-to-end training; see [roadmap](#roadmap).
+
+Stack: **SvelteKit** (Svelte 5 runes) + **Tailwind v4** + **@lucide/svelte** +
+**Bun**. Design language: brutalist scientific instrument — warm
+parchment background, ink-black text, one signal-red accent for fires,
+**Fraunces** italic serif for hero numerals and the wordmark, **IBM
+Plex Mono** for everything else, hairline borders instead of rounded
+corners.
+
+```bash
+cd crates/horchd-gui
+
+# Dev: vite dev server + Tauri shell with HMR (auto-spawns both)
+cargo tauri dev
+
+# Production native bundle (.deb / .rpm / .AppImage)
+cargo tauri build
+```
+
+The crate follows the canonical Tauri 2 + SvelteKit layout — frontend
+at `crates/horchd-gui/`, Rust + `tauri.conf.json` at
+`crates/horchd-gui/src-tauri/`. Bootstrap (Linux dev headers + Tauri
+CLI) is in [crates/horchd-gui/README.md](crates/horchd-gui/README.md).
+
+The Wayland workaround for `Gdk Error 71` (NVIDIA + webkit2gtk +
+Wayland) is set automatically inside the binary; nothing to configure.
 
 ## Configuration
 
