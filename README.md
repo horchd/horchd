@@ -83,17 +83,33 @@ is bounded by `ort` and the bundled openWakeWord models — measured live
 via the daemon's `mean_latency_us` / `max_latency_us` counters and
 exposed in the `stats` log line every 30 s.
 
-```text
-                    │ 0       2        4        6        8       10 µs
-Detector::update    │█ 6.4 ns
-  steady-state      │
-Detector::update    │░ 1.1 ns
-  disabled          │
-audio callback      │█████████████ 2.85 µs
-  mono · 1280 samp  │
-audio callback      │██████████████████████████████████████ 8.34 µs
-  stereo · 3840·d3  │
+```mermaid
+---
+config:
+  xyChart:
+    width: 880
+    height: 380
+  themeVariables:
+    xyChart:
+      titleColor: "#1a1a1a"
+      backgroundColor: "#fafaf6"
+      plotColorPalette: "#c8311c"
+      xAxisLineColor: "#1a1a1a"
+      yAxisLineColor: "#1a1a1a"
+---
+xychart-beta horizontal
+    title "horchd hot-path latency (lower is better, log µs)"
+    x-axis ["Detector disabled", "Detector update", "callback mono 1280", "callback stereo 3840 d=3"]
+    y-axis "microseconds (log)" 0.001 --> 10
+    bar [0.00106, 0.00643, 2.85, 8.34]
 ```
+
+| Path                                  |  Latency  | Cost @ 12.5 fps |
+| ------------------------------------- | --------: | --------------: |
+| `Detector::update` (disabled)         |   1.06 ns |        0.000 %  |
+| `Detector::update` (steady-state)     |   6.43 ns |        0.000 %  |
+| audio callback · mono · 1280 samples  |   2.85 µs |        0.004 %  |
+| audio callback · stereo · 3840 (d=3)  |   8.34 µs |        0.010 %  |
 
 Real-world budget at the daemon's 12.5 fps frame rate:
 **12.5 × 8.34 µs ≈ 0.01 % of one CPU core for audio capture**, plus
