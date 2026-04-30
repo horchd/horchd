@@ -83,26 +83,7 @@ is bounded by `ort` and the bundled openWakeWord models — measured live
 via the daemon's `mean_latency_us` / `max_latency_us` counters and
 exposed in the `stats` log line every 30 s.
 
-```mermaid
----
-config:
-  xyChart:
-    width: 880
-    height: 380
-  themeVariables:
-    xyChart:
-      titleColor: "#1a1a1a"
-      backgroundColor: "#fafaf6"
-      plotColorPalette: "#c8311c"
-      xAxisLineColor: "#1a1a1a"
-      yAxisLineColor: "#1a1a1a"
----
-xychart-beta horizontal
-    title "horchd hot-path latency (lower is better, log µs)"
-    x-axis ["Detector disabled", "Detector update", "callback mono 1280", "callback stereo 3840 d=3"]
-    y-axis "microseconds (log)" 0.001 --> 10
-    bar [0.00106, 0.00643, 2.85, 8.34]
-```
+![horchd hot-path latency](https://quickchart.io/chart?c=%7B%22type%22%3A%22bar%22%2C%22data%22%3A%7B%22labels%22%3A%5B%22Detector+disabled%22%2C%22Detector+update%22%2C%22callback+mono+1280%22%2C%22callback+stereo+3840+d%3D3%22%5D%2C%22datasets%22%3A%5B%7B%22data%22%3A%5B0.00106%2C0.00643%2C2.85%2C8.34%5D%2C%22backgroundColor%22%3A%22%23c8311c%22%2C%22borderColor%22%3A%22%231a1a1a%22%2C%22borderWidth%22%3A1%7D%5D%7D%2C%22options%22%3A%7B%22indexAxis%22%3A%22y%22%2C%22plugins%22%3A%7B%22title%22%3A%7B%22display%22%3Atrue%2C%22text%22%3A%22horchd+hot-path+latency+%28%5Cu00b5s%2C+log+scale%2C+lower+is+better%29%22%2C%22color%22%3A%22%231a1a1a%22%7D%2C%22legend%22%3A%7B%22display%22%3Afalse%7D%7D%2C%22scales%22%3A%7B%22x%22%3A%7B%22type%22%3A%22logarithmic%22%2C%22min%22%3A0.001%2C%22max%22%3A30%2C%22ticks%22%3A%7B%22color%22%3A%22%231a1a1a%22%7D%2C%22grid%22%3A%7B%22color%22%3A%22%23e8e4d6%22%7D%7D%2C%22y%22%3A%7B%22ticks%22%3A%7B%22color%22%3A%22%231a1a1a%22%7D%2C%22grid%22%3A%7B%22display%22%3Afalse%7D%7D%7D%7D%7D&bkg=%23fafaf6&w=880&h=320)
 
 | Path                                  |  Latency  | Cost @ 12.5 fps |
 | ------------------------------------- | --------: | --------------: |
