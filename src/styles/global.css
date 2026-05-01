@@ -458,6 +458,9 @@ section {
   stroke: var(--signal);
   stroke-width: 1.6;
   fill: none;
+  animation: scroll-trace 8s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
 }
 .scope-canvas .trace.faint {
   stroke: var(--signal);
