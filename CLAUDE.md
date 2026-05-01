@@ -8,14 +8,17 @@ duplicate its contents here.
 ## Local folder layout (filesystem, not git)
 
 ```
-/home/newt/Dokumente/Projects/Personal/horchd/    ← org folder (mirrors github.com/horchd/)
-├── horchd/                                        ← THIS repo (the daemon workspace)
-└── horchd.github.io/                              ← Phase-10 docs site repo (future)
+/home/newt/Dokumente/Projects/Personal/NewtTheWolf/        ← org folder (mirrors codeberg.org/NewtTheWolf/)
+├── horchd/                                                 ← THIS repo (the daemon workspace)
+├── horchd.github.io/                                       ← legacy docsify site (retired, kept for reference)
+└── pages/                                                  ← parent for all Codeberg-Pages site sources
+    ├── horchd.xyz/                                         ← Astro source for the landing page
+    └── docs.horchd.xyz/                                    ← Eleventy + Halfmoon source for the docs
 ```
 
-The outer `horchd/` is a local convenience for grouping all `horchd/*` GitHub
-repos, not a git repo itself. Always `cd` into `horchd/horchd/` before
-running cargo or git commands for the daemon.
+The outer `NewtTheWolf/` is a local convenience for grouping all
+`NewtTheWolf/*` Codeberg repos, not a git repo itself. Always `cd` into
+`NewtTheWolf/horchd/` before running cargo or git commands for the daemon.
 
 ---
 
@@ -34,6 +37,37 @@ Cargo workspace monorepo with these crates:
 | `horchd` | bin | The daemon. Owns the audio capture + ONNX inference + D-Bus service. |
 | `horchctl` | bin | CLI client (think `systemctl`). Talks to the daemon over D-Bus. |
 | `horchd-gui` | bin | (Phase 9) Tauri tray + control panel. Talks to the daemon over D-Bus. |
+
+## Web presence (sites live as branches in this repo)
+
+`horchd.xyz` (landing) and `docs.horchd.xyz` (documentation) are both
+served by Codeberg Pages from branches in **this** Codeberg repo, *not*
+from separate repos:
+
+| Branch | Contents | Domain | Source folder |
+| --- | --- | --- | --- |
+| `main` | Rust daemon (this code) | — | `NewtTheWolf/horchd/` |
+| `pages-src` | Astro source for the landing | — | `NewtTheWolf/pages/horchd.xyz/` |
+| `pages` | Built `dist/` of the landing | `horchd.xyz` (`.domains` file) | (auto, from deploy.sh) |
+| `docs-src` | Eleventy + Halfmoon source for the docs | — | `NewtTheWolf/pages/docs.horchd.xyz/` |
+| `docs` | Built `_site/` of the docs | `docs.horchd.xyz` (`.domains` file) | (auto, from deploy.sh) |
+
+Codeberg Pages auto-detects the `pages` branch (root subdomain) and any
+named branch with a `.domains` file (subdomain via custom domain). The
+GitHub mirror picks all branches up too — visitors there see the
+`#GiveUpGitHub` redirect README in `.github/README.md`.
+
+**Deploy workflow:** `./deploy.sh` in each `pages/<domain>/` source folder
+rebuilds and force-pushes the dist into the corresponding served branch.
+Source-side changes go into `pages-src` / `docs-src` via normal commits.
+
+**DNS** for the custom domains (Cloudflare, gray cloud / DNS only):
+```
+A      horchd.xyz       217.197.84.141
+AAAA   horchd.xyz       2a0a:4580:103f:c0de::2
+TXT    horchd.xyz       "pages.horchd.NewtTheWolf.codeberg.page"
+CNAME  docs.horchd.xyz  docs.horchd.NewtTheWolf.codeberg.page.
+```
 
 ## Locked-in decisions (don't re-litigate without asking)
 
