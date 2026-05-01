@@ -20,23 +20,6 @@
         <path d="M120 0 V240 M240 0 V240 M360 0 V240 M480 0 V240" stroke-dasharray="2 6" />
       </g>
 
-      {/* faint trailing trace */}
-      <path
-        class="trace faint"
-        d="
-          M0,120
-          C 30,90 60,150 90,118 C 120,80 150,160 180,120
-          C 210,100 240,140 270,118 C 300,84 330,156 360,120
-          C 390,108 420,132 450,118 C 480,92 510,148 540,120
-          C 570,108 590,128 600,120
-          L 600,120
-          C 630,90 660,150 690,118 C 720,80 750,160 780,120
-          C 810,100 840,140 870,118 C 900,84 930,156 960,120
-          C 990,108 1020,132 1050,118 C 1080,92 1110,148 1140,120
-          C 1170,108 1190,128 1200,120
-        "
-      />
-
       {/* primary trace, scrolls 8s loop */}
       <path
         class="trace"
@@ -98,24 +81,67 @@
 </aside>
 
 <script>
-  // Cycle the score readout and frame counter for the lab-instrument feel.
-  // Pure cosmetic — no real audio, no real inference.
+  // Cycle the score readout. Pure cosmetic — no real audio, no real inference.
+  // Pauses when the scope is off-screen or the tab is hidden so we don't burn
+  // CPU on a visual the user can't see.
   const bar = document.querySelector<HTMLElement>("[data-score-bar]");
   const val = document.querySelector<HTMLElement>("[data-score-val]");
   const frameEl = document.querySelector<HTMLElement>("[data-frame]");
-  if (bar && val && frameEl) {
+  const scope = document.querySelector<HTMLElement>(".scope");
+  if (bar && val && frameEl && scope) {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     let frame = 0;
     let phase = 0;
-    setInterval(() => {
-      frame += 1;
-      phase += 0.18;
-      // most of the time: low noise floor; occasional spike.
-      const noise = 0.04 + Math.random() * 0.06;
-      const beat = Math.max(0, Math.sin(phase) - 0.7) * 4;
-      const score = Math.min(0.997, noise + beat * (0.5 + Math.random() * 0.5));
-      bar.style.width = (score * 100).toFixed(1) + "%";
-      val.textContent = score.toFixed(3);
-      frameEl.textContent = String(frame).padStart(5, "0");
-    }, 80);
+    let last = 0;
+    let rafId = 0;
+    let visible = !document.hidden;
+    let onScreen = true;
+
+    const tick = (now: number) => {
+      // throttle to ~12.5 Hz to match horchd's actual frame rate
+      if (now - last >= 80) {
+        last = now;
+        frame += 1;
+        phase += 0.18;
+        const noise = 0.04 + Math.random() * 0.06;
+        const beat = Math.max(0, Math.sin(phase) - 0.7) * 4;
+        const score = Math.min(
+          0.997,
+          noise + beat * (0.5 + Math.random() * 0.5),
+        );
+        bar.style.width = (score * 100).toFixed(1) + "%";
+        val.textContent = score.toFixed(3);
+        frameEl.textContent = String(frame).padStart(5, "0");
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const start = () => {
+      if (rafId || reduce || !visible || !onScreen) return;
+      rafId = requestAnimationFrame(tick);
+    };
+    const stop = () => {
+      if (!rafId) return;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
+
+    document.addEventListener("visibilitychange", () => {
+      visible = !document.hidden;
+      visible ? start() : stop();
+    });
+
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(
+        (entries) => {
+          onScreen = entries[0].isIntersecting;
+          onScreen ? start() : stop();
+        },
+        { threshold: 0.05 },
+      ).observe(scope);
+    } else {
+      start();
+    }
+    start();
   }
 </script>
