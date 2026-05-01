@@ -379,3 +379,183 @@ a.show-on-focus:focus {
 .docs-footer p {
   font-size: 0.85rem;
 }
+
+/* ---------- typography rhythm — match landing ---------- */
+
+:root {
+  --hd-font-display: "Newsreader", Georgia, serif;
+  --hd-font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --hd-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+body {
+  font-family: var(--hd-font-body);
+  font-feature-settings: "ss01" on, "cv11" on;
+}
+
+.content-title,
+.content h1,
+.content h2 {
+  font-family: var(--hd-font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+}
+.content h1 {
+  font-size: clamp(2.2rem, 4.5vw, 3.2rem);
+}
+.content h2 {
+  font-size: clamp(1.5rem, 2.6vw, 1.9rem);
+  margin-top: 2.4rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+.content h3 {
+  font-family: var(--hd-font-mono);
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--bs-emphasis-color);
+  margin-top: 1.8rem;
+}
+
+.content code,
+.content kbd,
+.content samp,
+.content tt {
+  font-family: var(--hd-font-mono) !important;
+  font-feature-settings: "tnum" on;
+}
+.content pre,
+.content pre code {
+  font-family: var(--hd-font-mono) !important;
+  font-size: 0.85rem;
+  line-height: 1.65;
+}
+.content :not(pre) > code {
+  font-size: 0.88em;
+  padding: 1px 6px;
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 2px;
+  color: var(--bs-emphasis-color);
+}
+
+/* sidebar typography matches landing */
+.sidebar-brand {
+  font-family: var(--hd-font-mono);
+  letter-spacing: 0.04em;
+}
+.sidebar-nav {
+  font-family: var(--hd-font-body);
+  font-size: 0.86rem;
+  letter-spacing: 0;
+}
+
+/* ---------- logo treatment ---------- */
+.sidebar-brand img {
+  height: 22px;
+  width: auto;
+  filter: none;
+}
+
+/* sidebar header pulse-dot — only show in main brand block, not also a duplicate */
+.navbar-brand::before {
+  display: none !important;
+}
+
+/* docs navbar (top, mobile + tablet) — softer */
+.docs-navbar {
+  border-bottom: 1px solid var(--bs-border-color);
+  background: rgba(12, 10, 8, 0.7);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+
+/* ---------- right side TOC ---------- */
+.toc {
+  font-family: var(--hd-font-mono);
+  font-size: 0.78rem;
+}
+.toc-heading,
+nav.toc-side h2,
+.toc-side .toc-heading {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: hsla(var(--bs-emphasis-color-hsl), 0.5);
+}
+
+/* ---------- alerts (admonitions) — keep Halfmoon style but recolor */
+.alert {
+  border: 1px solid var(--bs-border-color);
+  border-left: 3px solid var(--bs-primary);
+  border-radius: 0;
+  background: var(--bs-secondary-bg);
+}
+.alert .alert-heading {
+  font-family: var(--hd-font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bs-primary);
+}
+
+/* ---------- subtle reveal on first viewport ---------- */
+@keyframes hd-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+main > * {
+  animation: hd-reveal 0.5s ease-out backwards;
+}
+main > h1#top { animation-delay: 0.05s; }
+main > .content { animation-delay: 0.15s; }
+@media (prefers-reduced-motion: reduce) {
+  main > * { animation: none !important; }
+}
+
+/* eyebrow small tag style for the brand-tag */
+.brand-tag {
+  background: transparent;
+}
+
+/* hero card on home — match landing's tonal block */
+.hero-card,
+.alert.hero-card {
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-left: 0;
+  position: relative;
+  padding: 1.3rem 1.5rem;
+  margin: 1.5rem 0;
+  border-radius: 0;
+}
+.hero-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: var(--bs-primary);
+  opacity: 0.7;
+}
+.hero-card .eyebrow {
+  font-family: var(--hd-font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: hsla(var(--bs-emphasis-color-hsl), 0.55);
+  margin-bottom: 0.6rem;
+}
+.hero-card-title {
+  font-family: var(--hd-font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: clamp(1.4rem, 2.4vw, 1.8rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.6rem;
+}
