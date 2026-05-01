@@ -21,16 +21,81 @@ import Footer from "../components/Footer.astro";
       content="A native Linux daemon that listens to the system microphone, detects any of N user-defined wakewords in parallel, and broadcasts a D-Bus signal the moment one fires."
     />
     <meta name="theme-color" content="#0c0a08" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="author" content="NewtTheWolf" />
+
+    <link rel="canonical" href="https://horchd.xyz/" />
+
     <meta property="og:title" content="horchd — native wakeword daemon" />
     <meta
       property="og:description"
       content="Native Linux multi-wakeword detection over D-Bus. Rust + ONNX Runtime, 5.2 MB binary, ≈1% CPU at idle."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://horchd.xyz" />
+    <meta property="og:url" content="https://horchd.xyz/" />
+    <meta property="og:site_name" content="horchd" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:image" content="https://horchd.xyz/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="horchd — native multi-wakeword detection daemon for Linux" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="horchd — native wakeword daemon" />
+    <meta
+      name="twitter:description"
+      content="Native Linux multi-wakeword detection over D-Bus. Rust + ONNX Runtime, 5.2 MB binary, ≈1% CPU at idle."
+    />
+    <meta name="twitter:image" content="https://horchd.xyz/og-image.png" />
+    <meta name="twitter:image:alt" content="horchd — native multi-wakeword detection daemon for Linux" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" type="application/xml" href="/sitemap-index.xml" />
     <link rel="alternate" type="application/rss+xml" title="horchd releases" href="https://codeberg.org/NewtTheWolf/horchd/releases.rss" />
+
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://horchd.xyz/#software",
+          "name": "horchd",
+          "alternateName": "horch daemon",
+          "description": "Native Linux daemon for parallel multi-wakeword detection. Loads N user-defined ONNX classifiers, listens to the system microphone, and broadcasts a D-Bus signal the moment any wakeword fires.",
+          "url": "https://horchd.xyz/",
+          "applicationCategory": "UtilitiesApplication",
+          "applicationSubCategory": "Voice Assistant",
+          "operatingSystem": "Linux",
+          "softwareVersion": "0.1",
+          "license": "https://spdx.org/licenses/MIT.html",
+          "downloadUrl": "https://codeberg.org/NewtTheWolf/horchd/releases",
+          "codeRepository": "https://codeberg.org/NewtTheWolf/horchd",
+          "programmingLanguage": "Rust",
+          "softwareRequirements": "Linux with PipeWire, PulseAudio, or ALSA; D-Bus session bus",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "author": { "@id": "https://horchd.xyz/#author" }
+        },
+        {
+          "@type": "Person",
+          "@id": "https://horchd.xyz/#author",
+          "name": "NewtTheWolf",
+          "url": "https://codeberg.org/NewtTheWolf"
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://horchd.xyz/#website",
+          "url": "https://horchd.xyz/",
+          "name": "horchd",
+          "description": "Native multi-wakeword detection daemon for Linux.",
+          "inLanguage": "en"
+        }
+      ]
+    })} />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
