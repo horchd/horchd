@@ -18,7 +18,7 @@ echo "→ stage docs-pages branch from _site/"
 rm -rf .git
 git init -q -b docs-pages
 git add .
-git -c user.email=deploy@horchd.xyz -c user.name=deploy commit -q -m "deploy docs $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+git -c user.email=dominik@spitzli.dev -c user.name=NewtTheWolf commit -q -m "deploy docs $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 git remote add origin "$(cd .. && git config --get remote.origin.url)"
 git push -f origin docs-pages
 
