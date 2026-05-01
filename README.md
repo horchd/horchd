@@ -8,7 +8,7 @@ Source for the **horchd** documentation site, served at
 | ------------------------------ | ---------------------------------- | -------------------------------- |
 | `main`                         | Daemon Rust source                 | Untouched by this project        |
 | `docs-src`                     | This Eleventy project (the source) | Versioned source of truth        |
-| `docs-pages`                   | Contents of `_site/` only          | What Codeberg Pages actually serves |
+| `docs`                   | Contents of `_site/` only          | What Codeberg Pages actually serves |
 
 The site uses **Eleventy** + **Halfmoon** — the same stack and visual
 language as Codeberg's own documentation, with the Codeberg-amber
@@ -25,7 +25,7 @@ bun run build        # → _site/
 ## Deploy
 
 ```sh
-./deploy.sh          # builds + force-pushes _site/ to docs-pages branch
+./deploy.sh          # builds + force-pushes _site/ to docs branch
 ```
 
 ## Domain wiring
@@ -33,7 +33,7 @@ bun run build        # → _site/
 `.domains` lists `docs.horchd.xyz`. DNS:
 
 ```
-CNAME  docs.horchd.xyz  docs-pages.horchd.NewtTheWolf.codeberg.page.
+CNAME  docs.horchd.xyz  docs.horchd.NewtTheWolf.codeberg.page.
 ```
 
 (no TXT needed when using CNAME for a subdomain.)
