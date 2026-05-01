@@ -209,6 +209,12 @@ section {
   box-shadow: 0 0 8px var(--live);
   animation: pulse 1.6s ease-in-out infinite;
 }
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  align-self: center;
+}
 .brand sup {
   font-size: 10px;
   color: var(--fg-muted);
