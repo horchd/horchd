@@ -1,0 +1,42 @@
+---
+const cols = [
+  {
+    n: "I",
+    title: "Native to the metal.",
+    body: "Single Rust 2024 binary. No Python interpreter at runtime, no virtualenv to bootstrap, no GPU required. Boots in well under a hundred milliseconds, fits in the systemd user-unit lifecycle without ceremony.",
+    foot: "Rust · ONNX Runtime · cpal",
+  },
+  {
+    n: "II",
+    title: "N wakewords. One pipeline.",
+    body: "The two universal preprocessing models load exactly once. Every additional [[wakeword]] block adds one classifier evaluation per 80 ms — not a duplicate audio thread, not a duplicate ONNX session. Cost scales with unique model files, not detector instances.",
+    foot: "openWakeWord · multi-model",
+  },
+  {
+    n: "III",
+    title: "Speaks D-Bus, not a custom port.",
+    body: "Every Linux desktop already runs a session bus. horchd registers xyz.horchd.Daemon1 there, broadcasts a typed Detected signal, and lets anything subscribe — Home Assistant bridges, shell scripts, the bundled horchctl monitor, the tray app. No HTTP listener, no auth to invent, no protocol to maintain.",
+    foot: "session bus · no policy file",
+  },
+];
+---
+
+<section class="why" id="why">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Three principles</span>
+      <h2>What `horchd` is, in one paragraph each.</h2>
+    </div>
+
+    <div class="why-cols">
+      {cols.map((c) => (
+        <div class="why-col">
+          <div class="why-num">№ {c.n}</div>
+          <h3 class="why-title">{c.title}</h3>
+          <p class="why-body">{c.body}</p>
+          <div class="why-foot">{c.foot}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

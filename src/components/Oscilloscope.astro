@@ -1,0 +1,121 @@
+---
+// Faux real-time oscilloscope panel. Pure SVG + CSS animation.
+// Two waveforms scroll horizontally giving the illusion of a live trace.
+---
+
+<aside class="scope" aria-label="Live signal panel">
+  <div class="scope-head">
+    <span>↳ ws-mon · /xyz/horchd/Daemon1</span>
+    <span class="live">Detected</span>
+  </div>
+
+  <div class="scope-canvas">
+    <svg viewBox="0 0 600 240" preserveAspectRatio="none" aria-hidden="true">
+      {/* horizontal centre line */}
+      <line class="center-line" x1="0" y1="120" x2="600" y2="120" />
+
+      {/* faint grid */}
+      <g class="gridlines" opacity="0.5">
+        <path d="M0 60 H600 M0 180 H600" stroke-dasharray="2 6" />
+        <path d="M120 0 V240 M240 0 V240 M360 0 V240 M480 0 V240" stroke-dasharray="2 6" />
+      </g>
+
+      {/* faint trailing trace */}
+      <path
+        class="trace faint"
+        d="
+          M0,120
+          C 30,90 60,150 90,118 C 120,80 150,160 180,120
+          C 210,100 240,140 270,118 C 300,84 330,156 360,120
+          C 390,108 420,132 450,118 C 480,92 510,148 540,120
+          C 570,108 590,128 600,120
+          L 600,120
+          C 630,90 660,150 690,118 C 720,80 750,160 780,120
+          C 810,100 840,140 870,118 C 900,84 930,156 960,120
+          C 990,108 1020,132 1050,118 C 1080,92 1110,148 1140,120
+          C 1170,108 1190,128 1200,120
+        "
+      />
+
+      {/* primary trace, scrolls 8s loop */}
+      <path
+        class="trace"
+        d="
+          M0,120
+          L 12,118 L 24,124 L 36,116 L 48,128 L 60,108
+          C 72,96 84,150 96,118 C 108,86 120,158 132,120
+          L 144,114 L 156,126 L 168,118 L 180,122
+          C 195,90 210,168 225,116
+          L 234,118
+          C 248,140 264,68 280,120
+          L 296,118
+          L 308,124 L 320,116 L 332,128 L 344,108
+          L 356,118 L 368,122 L 380,116 L 392,128 L 404,108
+          C 416,96 428,150 440,118 C 452,86 464,158 476,120
+          L 488,118 L 500,122 L 512,116 L 524,128 L 536,108
+          L 548,118 L 560,122 L 572,116 L 584,128 L 596,118
+          L 600,120
+
+          L 600,120
+          L 612,118 L 624,124 L 636,116 L 648,128 L 660,108
+          C 672,96 684,150 696,118 C 708,86 720,158 732,120
+          L 744,114 L 756,126 L 768,118 L 780,122
+          C 795,90 810,168 825,116
+          L 834,118
+          C 848,140 864,68 880,120
+          L 896,118
+          L 908,124 L 920,116 L 932,128 L 944,108
+          L 956,118 L 968,122 L 980,116 L 992,128 L 1004,108
+          C 1016,96 1028,150 1040,118 C 1052,86 1064,158 1076,120
+          L 1088,118 L 1100,122 L 1112,116 L 1124,128 L 1136,108
+          L 1148,118 L 1160,122 L 1172,116 L 1184,128 L 1196,118
+          L 1200,120
+        "
+      />
+    </svg>
+  </div>
+
+  <div class="score-strip">
+    <span class="lbl">jarvis</span>
+    <div class="score-bar"><span data-score-bar></span></div>
+    <span class="score-val" data-score-val>0.000</span>
+  </div>
+
+  <div class="scope-foot">
+    <div>
+      <span class="label">FRAME</span>
+      <span class="val" data-frame>00000</span>
+    </div>
+    <div>
+      <span class="label">FPS</span>
+      <span class="val">12.5<span class="unit">hz</span></span>
+    </div>
+    <div>
+      <span class="label">LATENCY</span>
+      <span class="val">0.74<span class="unit">ms</span></span>
+    </div>
+  </div>
+</aside>
+
+<script>
+  // Cycle the score readout and frame counter for the lab-instrument feel.
+  // Pure cosmetic — no real audio, no real inference.
+  const bar = document.querySelector<HTMLElement>("[data-score-bar]");
+  const val = document.querySelector<HTMLElement>("[data-score-val]");
+  const frameEl = document.querySelector<HTMLElement>("[data-frame]");
+  if (bar && val && frameEl) {
+    let frame = 0;
+    let phase = 0;
+    setInterval(() => {
+      frame += 1;
+      phase += 0.18;
+      // most of the time: low noise floor; occasional spike.
+      const noise = 0.04 + Math.random() * 0.06;
+      const beat = Math.max(0, Math.sin(phase) - 0.7) * 4;
+      const score = Math.min(0.997, noise + beat * (0.5 + Math.random() * 0.5));
+      bar.style.width = (score * 100).toFixed(1) + "%";
+      val.textContent = score.toFixed(3);
+      frameEl.textContent = String(frame).padStart(5, "0");
+    }, 80);
+  }
+</script>

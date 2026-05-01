@@ -1,0 +1,74 @@
+---
+type Spark = { d: string };
+const sparks = {
+  flat: "M0,12 L8,11 L16,13 L24,11 L32,12 L40,11 L48,13 L56,11 L64,12 L72,11 L80,13 L88,11 L96,12 L104,11 L112,13 L120,12",
+  rise: "M0,18 L8,17 L16,15 L24,16 L32,13 L40,11 L48,9 L56,8 L64,7 L72,5 L80,4 L88,3 L96,2 L104,3 L112,2 L120,1",
+  spike:
+    "M0,18 L8,17 L16,18 L24,17 L32,16 L40,17 L48,4 L56,16 L64,17 L72,16 L80,17 L88,2 L96,17 L104,16 L112,18 L120,17",
+  step:
+    "M0,18 L20,18 L20,12 L40,12 L40,8 L60,8 L60,5 L80,5 L80,3 L100,3 L100,2 L120,2",
+};
+
+const readouts: { label: string; value: string; unit?: string; sub: string; spark: keyof typeof sparks }[] = [
+  {
+    label: "Frame rate",
+    value: "12.5",
+    unit: "fps",
+    sub: "one classifier eval per 80 ms input frame · sub-1 ms each",
+    spark: "flat",
+  },
+  {
+    label: "CPU at idle",
+    value: "≈1",
+    unit: "%",
+    sub: "single core, modern x86 · scales linearly with unique models",
+    spark: "spike",
+  },
+  {
+    label: "Binary",
+    value: "5.2",
+    unit: "MB",
+    sub: "dynamic ort · 28.9 MB with onnxruntime bundled",
+    spark: "step",
+  },
+  {
+    label: "Inference",
+    value: "≤1",
+    unit: "ms",
+    sub: "per model per frame · 1.5 MB shared + 80 KB per wakeword",
+    spark: "rise",
+  },
+];
+---
+
+<section class="readouts" id="numbers">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Instrument readout</span>
+      <h2>Lean enough to run on whatever hardware you already own.</h2>
+      <p>
+        Numbers from a release build on consumer x86. Wakeword detection is
+        the kind of always-on background work that should be invisible — these
+        budgets are the reason `horchd` aims to be.
+      </p>
+    </div>
+
+    <div class="readouts-grid">
+      {readouts.map((r) => (
+        <div class="readout">
+          <div class="readout-label"><span>{r.label}</span></div>
+          <div class="readout-value">
+            {r.value}
+            {r.unit && <span class="unit">{r.unit}</span>}
+          </div>
+          <div class="readout-sub">{r.sub}</div>
+          <div class="readout-spark" aria-hidden="true">
+            <svg viewBox="0 0 120 22" preserveAspectRatio="none">
+              <path d={sparks[r.spark]} />
+            </svg>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

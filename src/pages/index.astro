@@ -1,0 +1,176 @@
+---
+import "../styles/global.css";
+import Header from "../components/Header.astro";
+import Oscilloscope from "../components/Oscilloscope.astro";
+import Pipeline from "../components/Pipeline.astro";
+import Readouts from "../components/Readouts.astro";
+import Why from "../components/Why.astro";
+import Footer from "../components/Footer.astro";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>horchd — native multi-wakeword detection daemon for Linux</title>
+    <meta
+      name="description"
+      content="A native Linux daemon that listens to the system microphone, detects any of N user-defined wakewords in parallel, and broadcasts a D-Bus signal the moment one fires."
+    />
+    <meta name="theme-color" content="#0c0a08" />
+    <meta property="og:title" content="horchd — native wakeword daemon" />
+    <meta
+      property="og:description"
+      content="Native Linux multi-wakeword detection over D-Bus. Rust + ONNX Runtime, 5.2 MB binary, ≈1% CPU at idle."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://horchd.xyz" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate" type="application/rss+xml" title="horchd releases" href="https://codeberg.org/NewtTheWolf/horchd/releases.rss" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+  </head>
+
+  <body>
+    <div class="vignette" aria-hidden="true"></div>
+    <div class="gridbg" aria-hidden="true"></div>
+
+    <Header />
+
+    <main>
+      {/* ---------- HERO ---------- */}
+      <section class="hero">
+        <div class="container">
+          <div class="hero-grid">
+            <div>
+              <div class="hero-eyebrow reveal reveal-1">
+                <span class="eyebrow">v0.1 · early · Linux only</span>
+              </div>
+
+              <h1 class="hero-title reveal reveal-2">
+                horch<em>d</em><span style="color:var(--signal);font-style:normal;animation:blink 1.1s steps(1) infinite;">_</span>
+              </h1>
+
+              <p class="hero-tagline reveal reveal-3">
+                a daemon
+                <span class="roman" style="color:var(--fg-muted);">that</span>
+                listens.
+              </p>
+
+              <p class="hero-lede reveal reveal-3">
+                Native Linux <strong>multi-wakeword detection</strong>. Loads
+                <em style="color:var(--signal);font-style:normal;">N</em> user-defined
+                <code style="color:var(--fg-base);background:var(--bg-card);padding:1px 6px;border:1px solid var(--border);font-size:13px;">.onnx</code>
+                classifiers in parallel, listens to your mic, and broadcasts a
+                <code style="color:var(--fg-base);background:var(--bg-card);padding:1px 6px;border:1px solid var(--border);font-size:13px;">D-Bus Detected</code>
+                signal the moment any of them fires. Anything that speaks the
+                session bus can subscribe.
+              </p>
+
+              <div class="cta-row reveal reveal-4">
+                <a class="btn btn-primary" href="https://docs.horchd.xyz/install/">install</a>
+                <a class="btn" href="https://docs.horchd.xyz/quickstart/">quickstart</a>
+                <a class="btn" href="https://codeberg.org/NewtTheWolf/horchd">source</a>
+              </div>
+
+              <div class="hero-install reveal reveal-5" data-install>
+                <div class="hero-install-tabs" role="tablist">
+                  <button class="hero-install-tab" data-tab="cargo" data-active type="button">cargo</button>
+                  <button class="hero-install-tab" data-tab="aur" type="button">arch · aur</button>
+                  <button class="hero-install-tab" data-tab="src" type="button">source</button>
+                </div>
+                <div class="hero-install-body" data-pane="cargo">
+<button class="hero-install-copy" type="button" data-copy>copy</button><span class="cmt"># clone, install dynamic-ort variant</span>
+<span class="pmt">$</span> cargo install --git https://codeberg.org/NewtTheWolf/horchd horchd \
+    --no-default-features --features dynamic-onnxruntime
+<span class="pmt">$</span> systemctl --user enable --now horchd
+                </div>
+                <div class="hero-install-body" data-pane="aur" hidden>
+<button class="hero-install-copy" type="button" data-copy>copy</button><span class="cmt"># once published</span>
+<span class="pmt">$</span> yay -S horchd
+<span class="pmt">$</span> systemctl --user enable --now horchd
+                </div>
+                <div class="hero-install-body" data-pane="src" hidden>
+<button class="hero-install-copy" type="button" data-copy>copy</button><span class="cmt"># build from source</span>
+<span class="pmt">$</span> git clone ssh://git@codeberg.org/NewtTheWolf/horchd.git
+<span class="pmt">$</span> cd horchd && ./packaging/install.sh
+                </div>
+              </div>
+
+              <div class="kbd-row reveal reveal-5" style="margin-top:1.4rem;">
+                <span>session bus →</span>
+                <span class="kbd">xyz.horchd.Daemon1.Detected</span>
+                <span>·</span>
+                <span class="kbd">CLOCK_MONOTONIC</span>
+              </div>
+            </div>
+
+            <div class="reveal reveal-4">
+              <Oscilloscope />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <Pipeline />
+      <Readouts />
+      <Why />
+    </main>
+
+    <Footer />
+
+    <script>
+      // tab switching for the install card
+      const installCard = document.querySelector<HTMLElement>("[data-install]");
+      if (installCard) {
+        const tabs = installCard.querySelectorAll<HTMLButtonElement>("[data-tab]");
+        const panes = installCard.querySelectorAll<HTMLElement>("[data-pane]");
+        tabs.forEach((tab) => {
+          tab.addEventListener("click", () => {
+            const target = tab.dataset.tab;
+            tabs.forEach((t) => t.removeAttribute("data-active"));
+            tab.setAttribute("data-active", "");
+            panes.forEach((p) => {
+              if (p.dataset.pane === target) p.removeAttribute("hidden");
+              else p.setAttribute("hidden", "");
+            });
+          });
+        });
+      }
+
+      // copy buttons
+      document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const pane = btn.closest<HTMLElement>("[data-pane]");
+          if (!pane) return;
+          const txt = pane.innerText
+            .replace(/^copy\s*/i, "")
+            .replace(/^# .*$/gm, "")
+            .replace(/^\$\s*/gm, "")
+            .trim();
+          try {
+            await navigator.clipboard.writeText(txt);
+            const orig = btn.textContent;
+            btn.textContent = "copied";
+            btn.style.color = "var(--live)";
+            setTimeout(() => {
+              btn.textContent = orig;
+              btn.style.color = "";
+            }, 1400);
+          } catch {
+            /* ignore */
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,43 @@
+---
+const stages = [
+  { num: "01", name: "mic", meta: "16 kHz mono\ncpal capture" },
+  { num: "02", name: "frame", meta: "1280 samples\n80 ms hop" },
+  { num: "03", name: "melspec.onnx", meta: "32 mel bins\nuniversal" },
+  { num: "04", name: "embed.onnx", meta: "96-d / 80 ms\nuniversal" },
+  { num: "05", name: "window", meta: "16 frames\n1.28 s" },
+  { num: "06", name: "classifier", meta: "(1, 16, 96)\n→ (1, 1)" },
+  { num: "07", name: "Detected", meta: "name · score\ntimestamp" },
+];
+---
+
+<section class="pipeline" id="pipeline">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Signal path</span>
+      <h2>From microphone capture to D-Bus signal in one frame.</h2>
+      <p>
+        Every stage is the same one openWakeWord uses, ported to Rust + ONNX
+        Runtime. The two universal models load once and feed every detector;
+        adding the N-th wakeword costs one classifier evaluation per frame, not
+        a second audio thread.
+      </p>
+    </div>
+
+    <div class="pipe-flow" role="list">
+      {stages.map((s, i) => (
+        <>
+          <div class="pipe-node" role="listitem">
+            <div class="pipe-num">{s.num}</div>
+            <div class="pipe-name">{s.name}</div>
+            <div class="pipe-meta" style="white-space:pre-line">{s.meta}</div>
+          </div>
+          {i < stages.length - 1 && (
+            <div class="pipe-arrow" aria-hidden="true">
+              <span class="marching"></span>
+            </div>
+          )}
+        </>
+      ))}
+    </div>
+  </div>
+</section>
