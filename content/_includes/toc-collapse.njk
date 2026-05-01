@@ -1,0 +1,13 @@
+{% if content | toc %}
+<nav class="mb-3 d-xl-none" data-pagefind-ignore="all">
+  <details class="collapse-panel">
+    <summary class="btn btn-secondary d-block w-100 py-2 d-flex align-items-center justify-content-between">
+      <span class="antialiased">On this page</span>
+      {% fas_icon "angle-down" %}
+    </summary>
+    <div id="toc" class="border rounded mt-2">
+      {{ content | toc | safe }}
+    </div>
+  </details>
+</nav>
+{% endif %}

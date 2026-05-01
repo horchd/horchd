@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" data-bs-core="modern">
+  <head>
+    <title>{% if eleventyNavigation.title %}{{ eleventyNavigation.title }} | {% endif %}horchd documentation</title>
+
+    <meta charset="UTF-8" />
+    {% if description %}
+    <meta name="description" content="{{ description }}" />
+    {% endif %}
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {% if env.environment == "testing" %}
+    <meta name="robots" content="noindex" />
+    {% endif %}
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <link rel="preload" href="https://fonts.codeberg.org/dist/inter/Inter%20Web/inter.css" as="style" />
+    <link rel="preload" href="https://fonts.codeberg.org/dist/fontawesome6/css/svg-with-js.css" as="style" />
+
+    <link rel="stylesheet" type="text/css" href="/halfmoon.css">
+
+    <link rel="stylesheet" type="text/css" href="/assets/css/horchd-docs.css" />
+    <!-- Syntax highlighting -->
+    <link rel="stylesheet" type="text/css" href="/assets/css/prism-nord.css" />
+
+    <!-- Details and License: https://fonts.codeberg.org/fonts/inter -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.codeberg.org/dist/inter/Inter%20Web/inter.css" />
+
+    <!-- Details and License: https://fonts.codeberg.org/fonts/fontawesome5 -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.codeberg.org/dist/fontawesome6/css/svg-with-js.css" />
+
+    <link href="/pagefind/pagefind-modular-ui.css" rel="stylesheet" />
+    <script src="/pagefind/pagefind-modular-ui.js"></script>
+    <script>
+      window.addEventListener('DOMContentLoaded', (event) => {
+        const instance = new PagefindModularUI.Instance();
+        instance.add(
+          new PagefindModularUI.Input({
+            containerElement: '#search-input',
+          }),
+        );
+        instance.add(
+          new PagefindModularUI.ResultList({
+            containerElement: '#search-results',
+          }),
+        );
+        document.addEventListener(
+          'keydown',
+          (event) => {
+            if (event.key == '/') {
+              event.preventDefault();
+              document.getElementById('search-input').focus();
+            }
+          },
+          false,
+        );
+      });
+    </script>
+
+    {% if page.url != '/' %}
+    <script>
+      // @license magnet:?xt=urn:btih:90dc5c0be029de84e523b9b3922520e79e0e6f08&dn=cc0.txt CC0
+      document.addEventListener('DOMContentLoaded', function () {
+        document.getElementsByClassName('active')[0].scrollIntoView({ block: 'center' });
+      });
+      // @license-end
+    </script>
+    {% endif %}
+    <script src="/assets/js/index.js"></script>
+  </head>
+
+  <body class="position-relative ps-lg-sbwidth">
+    <nav class="sidebar offcanvas-start offcanvas-lg">
+      <div class="offcanvas-header position-relative justify-content-start flex-shrink-0 py-0">
+        <a class="sidebar-brand d-flex align-items-center me-auto" href="/">
+          <img
+            src="/assets/horchd-mark.svg"
+            eleventy:ignore=""
+            class="d-block flex-shrink-0 me-1"
+            height="20"
+            width="30"
+            alt="horchd"
+          />
+          <span class="brand-text">horchd</span><span class="brand-tag ms-1">docs</span>
+        </a>
+        <button
+          type="button"
+          class="btn btn-secondary btn-square d-none d-lg-inline-block"
+          aria-label="Toggle dark mode"
+          onclick="toggleDarkMode()"
+        >
+          {% fas_icon "moon" %}
+        </button>
+        <button type="button" class="btn-close d-lg-none ms-1" aria-label="Close" onclick="toggleSidebar()"></button>
+      </div>
+      <div class="offcanvas-body position-relative p-0">
+        <div class="filter-docs sticky-top p-3">
+          <input
+            id="search-input"
+            type="text"
+            class="form-control search"
+            placeholder="Filter docs"
+            aria-label="Filter docs"
+          />
+          <div class="mt-1">
+            <small
+              >Press
+              <kbd class="text-body" style="font-size: 10px; background-color: hsla(var(--bs-emphasis-color-hsl), 0.1)"
+                >/</kbd
+              >
+              to focus</small
+            >
+          </div>
+        </div>
+        <div class="p-3 pt-0">
+          <div id="search-results"></div>
+          <ul class="sidebar-nav list">
+          {% for entry in collections.all | eleventyNavigation %} {% set active = entry.url == page.url or entry.key ==
+          eleventyNavigation.parent %} {% if (not entry.draft) or active %}
+          <li class="position-relative mt-4 mb-1">
+            <h5 class="sidebar-header {% if active %} active{% endif %}">
+              <a class="text-decoration-none link-white" href="{{ entry.url }}" id="{{ entry.key }}"
+                >{% fas_icon entry.icon | default("caret-right") %} {{ entry.title }}</a
+              >
+            </h5>
+          </li>
+          {% if entry.children.length > 0 %} {% for child in entry.children %} {% set child_active = child.url ==
+          page.url %} {% if child_active or not child.draft %}
+          <li class="nav-item">
+            <a
+              href="{{ child.url }}"
+              class="nav-link {% if child_active %} active{% endif %}"
+              id="sidebar-{{ child.key }}"
+            >
+              <span class="name">{{ child.title }}</span>
+            </a>
+          </li>
+          {% endif %} {% endfor %} {% endif %} {% endif %} {%- endfor %}
+        </ul>
+      </div>
+    </nav>
+
+    <nav class="navbar navbar-expand-md docs-navbar sticky-top">
+      <div class="container-md px-3 px-sm-4 px-xl-5 py-1 justify-content-start">
+        <div class="btn-group me-3 d-lg-none">
+          <button type="button" class="btn btn-secondary btn-square" aria-label="Toggle sidebar" onclick="toggleSidebar()">
+            {% fas_icon "bars" %}
+          </button>
+          <button type="button" class="btn btn-secondary btn-square" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+            {% fas_icon "moon" %}
+          </button>
+        </div>
+        <a class="navbar-brand d-flex align-items-center d-lg-none ms-auto ms-md-0" href="/">
+          <img
+            src="/assets/horchd-mark.svg"
+            eleventy:ignore=""
+            class="d-block flex-shrink-0 me-1"
+            height="20"
+            width="30"
+            alt="horchd"
+          />
+          <span class="brand-text">horchd</span><span class="brand-tag ms-1">docs</span>
+        </a>
+        <div class="btn-group ms-auto d-md-none">
+          <a href="{{ urls.commitHistoryMaster }}/{{ page.inputPath }}" class="btn btn-secondary btn-square" target="_blank" rel="noreferrer">
+            {% fas_icon "history" %}
+          </a>
+          <a href="{{ urls.docsSourcesMaster }}/{{ page.inputPath }}" class="btn btn-secondary btn-square" target="_blank" rel="noreferrer">
+            {% fas_icon "code" %}
+          </a>
+        </div>
+        <div class="collapse navbar-collapse" id="docs-navbar-collapse">
+          <div class="d-flex align-items-center justify-content-center ms-auto gap-2">
+            <a
+              href="{{ urls.commitHistoryMaster }}/{{ page.inputPath }}"
+              class="btn btn-secondary flex-grow-1 d-flex align-items-center flex-nowrap text-start position-relative"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {% fas_icon "history" %} &nbsp; View History
+            </a>
+            <a
+              href="{{ urls.docsSourcesMaster }}/{{ page.inputPath }}"
+              class="btn btn-secondary flex-grow-1 d-flex align-items-center flex-nowrap text-start position-relative"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {% fas_icon "code" %} &nbsp; View Source
+            </a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container-md px-3 px-sm-4 px-xl-5">
+      <div class="row">
+        <main class="col-xl-9 py-3 py-sm-4" data-pagefind-body>
+          {% if eleventyNavigation.title %}
+          <h1 id="top" class="lh-base mb-1 content-title font-size-24">{{ eleventyNavigation.title }}</h1>
+          {% endif %} {% if eleventyNavigation.draft %}
+          <strong data-pagefind-ignore="all"
+            >Please note that this article is still a draft and might not have any contents yet.</strong
+          >
+          {% endif %}
+
+          <div class="content">
+            {% include 'toc-collapse.njk' %}
+            {{ content | safe }}
+          </div>
+          {% include 'contribution_invitation.njk' %}
+        </main>
+        {% include 'toc-side.njk' %}
+      </div>
+    </div>
+
+    <footer class="docs-footer" data-pagefind-ignore="all">
+      <div class="container-md px-3 px-sm-4 px-xl-5 py-3">
+        <p class="mb-1">
+          horchd documentation · MIT or Apache-2.0 ·
+          <a href="https://codeberg.org/NewtTheWolf/horchd">source on Codeberg</a> ·
+          <a href="https://github.com/horchd/horchd">github mirror</a>
+        </p>
+        <p class="text-muted small mb-0">
+          Site template adapted from
+          <a href="https://codeberg.org/Codeberg/Documentation">Codeberg Documentation</a>
+          (CC-BY-SA 4.0). Eleventy + Halfmoon.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

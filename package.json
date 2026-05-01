@@ -1,0 +1,26 @@
+{
+  "name": "horchd-docs",
+  "description": "Documentation site for horchd — a native multi-wakeword detection daemon.",
+  "private": true,
+  "scripts": {
+    "build": "eleventy",
+    "dev": "eleventy --serve --incremental",
+    "lint-prettier": "prettier --check .",
+    "lint-prettier-fix": "prettier -w --check ."
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.5",
+    "@11ty/eleventy-img": "6.0.4",
+    "@11ty/eleventy-navigation": "1.0.5",
+    "@11ty/eleventy-plugin-syntaxhighlight": "5.0.2",
+    "@fortawesome/fontawesome-svg-core": "7.1.0",
+    "@fortawesome/free-solid-svg-icons": "7.1.0",
+    "@toycode/markdown-it-class": "1.2.4",
+    "@uncenter/eleventy-plugin-toc": "1.0.3",
+    "halfmoon": "2.0.2",
+    "markdown-it": "14.1.1",
+    "markdown-it-anchor": "9.2.0",
+    "pagefind": "1.4.0",
+    "prettier": "3.8.1"
+  }
+}

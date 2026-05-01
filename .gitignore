@@ -1,0 +1,25 @@
+# Project-specific
+## Output of Eleventy site builder
+_site/
+.cache/
+
+
+# Integrated development environments (IDEs) and text editors
+## JetBrains
+.idea/
+
+## Visual Studio Code
+.vscode/
+
+
+# Package managers
+## npm - Node.js
+node_modules/
+
+## pnpm - Node.js
+.pnpm-store/
+
+
+# Web servers
+## Codeberg Pages
+pages.git/
