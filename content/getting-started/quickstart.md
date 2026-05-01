@@ -4,6 +4,7 @@ eleventyNavigation:
   title: Quickstart
   parent: getting-started
   order: 20
+description: "Drop a wakeword model into ~/.local/share/horchd/models/, register it in config.toml, and watch it fire on the D-Bus session bus."
 ---
 
 You've installed horchd (see [Install](/getting-started/install/)) and

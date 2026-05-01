@@ -4,6 +4,7 @@ eleventyNavigation:
   title: FAQ
   parent: support
   order: 10
+description: "Frequently asked questions about horchd: why a daemon over a library, hardware requirements, license, and comparison with openWakeWord."
 ---
 
 ## Why a daemon? Why not a library?

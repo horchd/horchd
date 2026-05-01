@@ -4,6 +4,7 @@ eleventyNavigation:
   title: Rust
   parent: recipes
   order: 30
+description: "Subscribe to xyz.horchd.Daemon1.Detected from Rust using zbus and the published horchd-client proxy trait."
 ---
 
 The proxy trait that `horchctl` uses is published as part of the

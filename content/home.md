@@ -2,6 +2,7 @@
 eleventyNavigation:
   title: Overview
 permalink: /
+description: "horchd is a Rust daemon that loads N user-defined ONNX wakeword classifiers in parallel and broadcasts a D-Bus Detected signal to any subscriber on the Linux session bus."
 ---
 
 `horchd` is a native multi-wakeword detection daemon written in Rust. It loads

@@ -1,0 +1,18 @@
+---
+permalink: /sitemap.xml
+eleventyExcludeFromCollections: true
+layout: false
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{%- for entry in collections.all -%}
+  {%- if not entry.data.eleventyNavigation.draft and not entry.data.eleventyExcludeFromCollections -%}
+  <url>
+    <loc>{{ site.url }}{{ entry.url }}</loc>
+    <lastmod>{{ (entry.date or page.date).toISOString().slice(0, 10) }}</lastmod>
+    <changefreq>{% if entry.url == "/" %}weekly{% else %}monthly{% endif %}</changefreq>
+    <priority>{% if entry.url == "/" %}1.0{% elif entry.data.eleventyNavigation.parent %}0.6{% else %}0.8{% endif %}</priority>
+  </url>
+  {%- endif -%}
+{%- endfor %}
+</urlset>

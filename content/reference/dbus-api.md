@@ -4,6 +4,7 @@ eleventyNavigation:
   title: D-Bus API
   parent: reference
   order: 20
+description: "The xyz.horchd.Daemon1 interface on the D-Bus session bus: methods, properties, and the typed Detected signal contract."
 ---
 
 `horchd` exposes a single object on the **session bus** — not the system

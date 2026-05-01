@@ -4,6 +4,7 @@ eleventyNavigation:
   title: Install
   parent: getting-started
   order: 10
+description: "Install horchd from source, AUR, or via cargo. Bundled vs. dynamic ONNX Runtime trade-offs and systemd user-unit setup."
 ---
 
 ## Source install (any distro with cargo)

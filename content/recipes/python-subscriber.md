@@ -4,6 +4,7 @@ eleventyNavigation:
   title: Python
   parent: recipes
   order: 20
+description: "Subscribe to horchd's D-Bus Detected signal from Python with dbus-next or jeepney and react to wakewords asynchronously."
 ---
 
 ## With `dbus-next`

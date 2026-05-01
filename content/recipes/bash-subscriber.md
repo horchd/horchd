@@ -4,6 +4,7 @@ eleventyNavigation:
   title: Bash
   parent: recipes
   order: 10
+description: "Subscribe to the horchd D-Bus Detected signal from a Bash one-liner using gdbus monitor and react to wakewords from shell scripts."
 ---
 
 ## One-liner monitor

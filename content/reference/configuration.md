@@ -4,6 +4,7 @@ eleventyNavigation:
   title: Configuration
   parent: reference
   order: 10
+description: "Complete reference for ~/.config/horchd/config.toml — every key, default, and reload semantic of the horchd daemon."
 ---
 
 `~/.config/horchd/config.toml` is the source of truth. Hand-editable;

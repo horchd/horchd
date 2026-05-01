@@ -4,6 +4,7 @@ eleventyNavigation:
   title: Training a wakeword
   parent: guides
   order: 10
+description: "How to obtain or train a custom wakeword classifier compatible with horchd's openWakeWord-derived ONNX inference pipeline."
 ---
 
 `horchd` loads `.onnx` classifiers and runs them. To get a model in the
