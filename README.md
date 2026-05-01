@@ -1,8 +1,9 @@
 # horchd.xyz
 
-Source for the **horchd** landing page. Maps to Codeberg repo
-[`NewtTheWolf/horchd.xyz`](https://codeberg.org/NewtTheWolf/horchd.xyz),
-served at <https://horchd.xyz> via the `public/.domains` file.
+Source for the **horchd** landing page. Lives as a `pages-src` branch in
+the daemon repo [`NewtTheWolf/horchd`](https://codeberg.org/NewtTheWolf/horchd);
+the built static output is on the `pages` branch of the same repo.
+Served at <https://horchd.xyz> via the `public/.domains` file.
 
 The site is built with Astro (no framework, no Tailwind — just CSS) and
 emits a single ~16 KB HTML page plus inlined critical styles.
@@ -21,12 +22,13 @@ bun run preview      # serve dist/ locally
 Codeberg Pages auto-detects the **`pages` branch** of any repo and serves
 its contents at the domain configured in `.domains`. Source / built branches:
 
-| Branch  | What's there                  | Why                              |
-| ------- | ----------------------------- | -------------------------------- |
-| `main`  | This Astro project (the src)  | Versioned source of truth        |
-| `pages` | Contents of `dist/` only      | What Codeberg Pages actually serves |
+| Branch in `NewtTheWolf/horchd` | What's there                 | Why                              |
+| ------------------------------ | ---------------------------- | -------------------------------- |
+| `main`                         | Daemon Rust source           | Untouched by this project        |
+| `pages-src`                    | This Astro project (the src) | Versioned source of truth        |
+| `pages`                        | Contents of `dist/` only     | What Codeberg Pages actually serves |
 
-After making changes on `main`:
+After making changes on `pages-src`:
 
 ```sh
 bun run build
