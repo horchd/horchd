@@ -1,7 +1,7 @@
 # horchd.xyz
 
 Source for the **horchd** landing page. Maps to Codeberg repo
-[`NewtTheWolf/pages`](https://codeberg.org/NewtTheWolf/pages),
+[`NewtTheWolf/horchd.xyz`](https://codeberg.org/NewtTheWolf/horchd.xyz),
 served at <https://horchd.xyz> via the `public/.domains` file.
 
 The site is built with Astro (no framework, no Tailwind — just CSS) and
@@ -18,15 +18,15 @@ bun run preview      # serve dist/ locally
 
 ## Deploy
 
-Codeberg Pages serves the **default branch** of a repo named `pages`.
-Source-branch / built-branch pattern:
+Codeberg Pages auto-detects the **`pages` branch** of any repo and serves
+its contents at the domain configured in `.domains`. Source / built branches:
 
-| Branch   | What's there                  | Why                              |
-| -------- | ----------------------------- | -------------------------------- |
-| `source` | This Astro project (the src)  | Versioned source of truth        |
-| `main`   | Contents of `dist/` only      | What Codeberg Pages actually serves |
+| Branch  | What's there                  | Why                              |
+| ------- | ----------------------------- | -------------------------------- |
+| `main`  | This Astro project (the src)  | Versioned source of truth        |
+| `pages` | Contents of `dist/` only      | What Codeberg Pages actually serves |
 
-After making changes on `source`:
+After making changes on `main`:
 
 ```sh
 bun run build
