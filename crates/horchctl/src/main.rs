@@ -48,6 +48,12 @@ enum Command {
     /// Re-read the config file and reconcile in-memory state.
     Reload,
 
+    /// List input devices that the daemon's cpal host can see.
+    InputDevices,
+    /// Switch the daemon's audio capture device. `--save` persists to
+    /// `[engine].device` in `config.toml`.
+    SetInput(SetInputArgs),
+
     /// Import a wakeword model from an HTTP(S) URL or a local path,
     /// stage it under `~/.local/share/horchd/models/`, and register it
     /// with the daemon.
@@ -66,6 +72,16 @@ struct ProcessArgs {
     /// Emit one JSON object per line instead of the human-readable table.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Args)]
+struct SetInputArgs {
+    /// cpal device name (use `horchctl input-devices` to list). Pass
+    /// `default` to follow the host's default input.
+    name: String,
+    /// Persist the change to `[engine].device` in `config.toml`.
+    #[arg(long)]
+    save: bool,
 }
 
 #[derive(Debug, Args)]
@@ -218,6 +234,28 @@ async fn main() -> Result<()> {
         Command::Reload => {
             proxy.reload().await.context("Reload")?;
             println!("reloaded");
+            Ok(())
+        }
+        Command::InputDevices => {
+            let devices = proxy
+                .list_input_devices()
+                .await
+                .context("ListInputDevices")?;
+            if devices.is_empty() {
+                println!("(no input devices found)");
+            } else {
+                for d in devices {
+                    println!("  {d}");
+                }
+            }
+            Ok(())
+        }
+        Command::SetInput(args) => {
+            proxy
+                .set_input_device(&args.name, args.save)
+                .await
+                .with_context(|| format!("SetInputDevice({:?})", args.name))?;
+            println!("input device set to {:?}", args.name);
             Ok(())
         }
         Command::Import(args) => run_import(&proxy, args).await,
