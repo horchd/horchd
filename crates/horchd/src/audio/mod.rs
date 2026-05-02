@@ -11,6 +11,10 @@
 //! must never block. We use [`mpsc::Sender::try_send`]; on overflow the
 //! frame is dropped and counted, never blocked.
 
+pub mod mic;
+
+pub use mic::MicSource;
+
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -22,13 +26,8 @@ use cpal::{
     FromSample, Sample, SampleFormat, SizedSample, Stream, StreamConfig, SupportedStreamConfig,
     SupportedStreamConfigRange,
 };
+use horchd_client::{AudioFrame, FRAME_SAMPLES, TARGET_SAMPLE_RATE};
 use tokio::sync::mpsc;
-
-pub const TARGET_SAMPLE_RATE: u32 = 16_000;
-pub const FRAME_SAMPLES: usize = 1280; // 80 ms at 16 kHz
-
-/// One downsampled audio frame ready for the inference pipeline.
-pub type Frame = Box<[f32; FRAME_SAMPLES]>;
 
 #[derive(Debug)]
 pub struct AudioStats {
@@ -93,24 +92,10 @@ impl AudioStats {
     }
 }
 
-/// Owns the live cpal stream + its stats. `Stream` is `!Send` on
-/// Linux/ALSA, so this handle must stay on the thread that drives the
-/// tokio runtime's `block_on` (the main thread under `#[tokio::main]`).
-/// Drop it to stop the audio stream.
-pub struct AudioHandle {
-    /// Read-only label of the device cpal actually opened (matches what
-    /// `default_input_device` / `pick_device` resolved to). Used for
-    /// logging + future "what's the active device" UI readouts.
-    #[allow(dead_code)]
-    pub device_label: String,
-    _stream: Stream,
-}
-
-/// Enumerate human-readable input device names that actually expose at
-/// least one usable input config. Cheap-ish — opens devices to ask for
-/// configs, but doesn't start any streams. Filtering by config presence
-/// drops cpal/ALSA stubs (e.g. output-only entries that show up in the
-/// raw `input_devices()` iterator on Linux but aren't real captures).
+/// Enumerate input devices that expose at least one usable config.
+/// Filtering by config presence drops cpal/ALSA stubs (output-only
+/// entries that show up in the raw `input_devices()` iterator on Linux
+/// but aren't real captures).
 pub fn list_input_device_names() -> Result<Vec<String>> {
     let host = cpal::default_host();
     let mut names: Vec<String> = host
@@ -130,14 +115,13 @@ pub fn list_input_device_names() -> Result<Vec<String>> {
 
 /// Open `device_name` (`"default"` for the host default), force mono +
 /// 16 kHz via downmix + integer decimation, and start streaming frames.
-/// The caller passes the `AudioStats` Arc so counters survive
-/// device hot-swaps. Returns the !Send handle separately from the Send
-/// receiver so the receiver can be moved into a tokio task.
-pub fn start(
+/// Returns the `!Send` cpal stream (drop to stop) along with the
+/// resolved device label and the Send-able frame receiver.
+pub(crate) fn open_input_stream(
     device_name: &str,
     channel_capacity: usize,
     stats: Arc<AudioStats>,
-) -> Result<(AudioHandle, mpsc::Receiver<Frame>)> {
+) -> Result<(Stream, String, mpsc::Receiver<AudioFrame>)> {
     let host = cpal::default_host();
     let device = pick_device(&host, device_name)?;
     let device_label = describe(&device);
@@ -150,7 +134,7 @@ pub fn start(
     let sample_format = chosen.sample_format();
     let stream_cfg = chosen.config();
 
-    let (tx, rx) = mpsc::channel::<Frame>(channel_capacity);
+    let (tx, rx) = mpsc::channel::<AudioFrame>(channel_capacity);
     let state = CallbackState::new(in_channels, decimation);
 
     let stream = build_stream(&device, &stream_cfg, sample_format, state, tx, stats)?;
@@ -165,13 +149,7 @@ pub fn start(
         "audio capture started"
     );
 
-    Ok((
-        AudioHandle {
-            device_label,
-            _stream: stream,
-        },
-        rx,
-    ))
+    Ok((stream, device_label, rx))
 }
 
 fn pick_device(host: &cpal::Host, name: &str) -> Result<cpal::Device> {
@@ -285,7 +263,7 @@ fn build_stream(
     cfg: &StreamConfig,
     fmt: SampleFormat,
     state: CallbackState,
-    tx: mpsc::Sender<Frame>,
+    tx: mpsc::Sender<AudioFrame>,
     stats: Arc<AudioStats>,
 ) -> Result<Stream> {
     match fmt {
@@ -310,7 +288,7 @@ fn build_typed<S>(
     device: &cpal::Device,
     cfg: &StreamConfig,
     mut state: CallbackState,
-    tx: mpsc::Sender<Frame>,
+    tx: mpsc::Sender<AudioFrame>,
     stats: Arc<AudioStats>,
 ) -> Result<Stream, cpal::BuildStreamError>
 where
@@ -332,12 +310,12 @@ pub struct CallbackState {
     /// can never panic, even under future refactors.
     decimation: NonZeroUsize,
     decimation_phase: usize,
-    frame: Frame,
+    frame: AudioFrame,
     frame_pos: usize,
     /// Pre-allocated swap buffer so the cpal callback (real-time audio
     /// thread) doesn't allocate when emitting a frame; we just `swap`
     /// the two boxes when one is full.
-    spare: Frame,
+    spare: AudioFrame,
 }
 
 impl CallbackState {
@@ -355,7 +333,7 @@ impl CallbackState {
     /// Hot-path: convert one cpal callback's interleaved buffer into 16
     /// kHz mono frames. `pub` so benches and integration tests can
     /// drive it without spinning up cpal.
-    pub fn process<S>(&mut self, data: &[S], tx: &mpsc::Sender<Frame>, stats: &AudioStats)
+    pub fn process<S>(&mut self, data: &[S], tx: &mpsc::Sender<AudioFrame>, stats: &AudioStats)
     where
         S: SizedSample,
         f32: FromSample<S>,
@@ -383,7 +361,7 @@ impl CallbackState {
         stats.record_peak(blended.min(1.0));
     }
 
-    fn feed(&mut self, sample: f32, tx: &mpsc::Sender<Frame>, stats: &AudioStats) {
+    fn feed(&mut self, sample: f32, tx: &mpsc::Sender<AudioFrame>, stats: &AudioStats) {
         let phase = self.decimation_phase;
         self.decimation_phase = (phase + 1) % self.decimation.get();
         if phase != 0 {
@@ -470,7 +448,7 @@ mod tests {
         // every 3rd raw sample; FRAME_SAMPLES * 3 = 3840 raw samples per frame.
         let mut state = CallbackState::new(1, NonZeroUsize::new(3).unwrap());
         let stats = Arc::new(AudioStats::new());
-        let (tx, mut rx) = mpsc::channel::<Frame>(8);
+        let (tx, mut rx) = mpsc::channel::<AudioFrame>(8);
         let raw: Vec<f32> = (0..FRAME_SAMPLES * 3 * 2)
             .map(|i| i as f32 * 1e-4)
             .collect();
@@ -495,7 +473,7 @@ mod tests {
     fn callback_drops_when_channel_full() {
         let mut state = CallbackState::new(1, NonZeroUsize::new(1).unwrap());
         let stats = Arc::new(AudioStats::new());
-        let (tx, _rx) = mpsc::channel::<Frame>(1);
+        let (tx, _rx) = mpsc::channel::<AudioFrame>(1);
         let raw: Vec<f32> = vec![0.0; FRAME_SAMPLES * 4];
         state.process::<f32>(&raw, &tx, &stats);
         assert_eq!(stats.frames_emitted(), 1);
@@ -506,7 +484,7 @@ mod tests {
     fn callback_downmixes_stereo() {
         let mut state = CallbackState::new(2, NonZeroUsize::new(1).unwrap());
         let stats = Arc::new(AudioStats::new());
-        let (tx, mut rx) = mpsc::channel::<Frame>(2);
+        let (tx, mut rx) = mpsc::channel::<AudioFrame>(2);
         // Stereo interleaved: L=1.0, R=-1.0 → mono mean = 0.0
         let raw: Vec<f32> = (0..FRAME_SAMPLES)
             .flat_map(|_| [1.0_f32, -1.0_f32])

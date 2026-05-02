@@ -21,7 +21,7 @@ use ndarray::{Array2, Array3, Array4};
 use ort::session::Session;
 use ort::value::TensorRef;
 
-use crate::audio::FRAME_SAMPLES;
+use horchd_client::FRAME_SAMPLES;
 
 pub const MEL_BINS: usize = 32;
 pub const MEL_HOP_SAMPLES: usize = 160; // 10 ms @ 16 kHz

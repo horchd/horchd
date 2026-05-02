@@ -1,13 +1,13 @@
 //! Per-wakeword detection state machine.
 //!
-//! Fires a [`WakewordEvent`] only on a *rising-edge* threshold cross,
-//! and only when the cooldown from the previous fire has elapsed. Both
+//! Fires a [`Detection`] only on a *rising-edge* threshold cross, and
+//! only when the cooldown from the previous fire has elapsed. Both
 //! rules together prevent a single utterance from emitting back-to-back
 //! detections while the score lingers above the threshold.
 
 use std::time::{Duration, Instant};
 
-use horchd_client::WakewordEvent;
+use horchd_client::Detection;
 
 pub struct Detector {
     pub name: String,
@@ -37,7 +37,7 @@ impl Detector {
     /// `#[must_use]`: the returned event is the only signal that a fire
     /// happened — silently dropping it loses the detection.
     #[must_use]
-    pub fn update(&mut self, score: f64, now: Instant) -> Option<WakewordEvent> {
+    pub fn update(&mut self, score: f64, now: Instant) -> Option<Detection> {
         if !self.enabled {
             self.was_above = false;
             return None;
@@ -54,7 +54,7 @@ impl Detector {
             return None;
         }
         self.last_fire = Some(now);
-        Some(WakewordEvent {
+        Some(Detection {
             name: self.name.clone(),
             score,
             timestamp_us: monotonic_us(),

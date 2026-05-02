@@ -29,6 +29,7 @@ dynamic-onnxruntime = ["ort/load-dynamic"]
 
 [dependencies]
 anyhow.workspace = true
+async-trait = "0.1"
 clap.workspace = true
 cpal = "0.17.3"
 horchd-client = { version = "0.1.0", path = "../client" }

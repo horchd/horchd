@@ -1859,6 +1859,7 @@ name = "horchd"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "clap",
  "cpal",
  "criterion",
@@ -1882,9 +1883,12 @@ dependencies = [
 name = "horchd-client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "serde",
  "shellexpand",
  "thiserror 2.0.18",
+ "tokio",
  "toml 1.1.2+spec-1.1.0",
  "zbus",
 ]
