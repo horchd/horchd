@@ -26,6 +26,10 @@ const SNAPSHOT_BROADCAST_CAPACITY: usize = 256;
 pub struct Pipeline {
     state: SharedState,
     stats: Arc<InferenceStats>,
+    /// Captured at construction so `Detector::update` gets a monotonic
+    /// `elapsed: Duration` consistent across hot-swaps of the audio
+    /// source.
+    started: Instant,
     detections: broadcast::Sender<Detection>,
     snapshots: broadcast::Sender<ScoreSnapshot>,
 }
@@ -37,6 +41,7 @@ impl Pipeline {
         Self {
             state,
             stats,
+            started: Instant::now(),
             detections,
             snapshots,
         }
@@ -79,6 +84,7 @@ impl Pipeline {
             self.stats.record_score(elapsed);
 
             let now = Instant::now();
+            let elapsed_since_start = now.duration_since(self.started);
             let snapshot_due = last_snapshot
                 .map(|t| now.duration_since(t) >= SCORE_SNAPSHOT_INTERVAL)
                 .unwrap_or(true);
@@ -92,9 +98,13 @@ impl Pipeline {
                         score: score_f64,
                     });
                 }
-                let Some(event) = det.update(score_f64, now) else {
+                let Some(mut event) = det.update(score_f64, elapsed_since_start) else {
                     continue;
                 };
+                // For wire-level Detected: override Detector's pipeline-
+                // relative timestamp with CLOCK_MONOTONIC so subscribers
+                // can correlate against their own clock_gettime() reads.
+                event.timestamp_us = crate::detector::monotonic_us();
                 tracing::info!(
                     name = %event.name,
                     score = event.score,
@@ -119,13 +129,11 @@ impl Pipeline {
 /// frame; for [`ProcessAudio`] we hand it a single
 /// [`crate::sink::MpscSink`] which is unbounded and never blocks.
 ///
-/// Cooldown caveat: [`Detector`] uses wall-clock `Instant` for its
-/// cooldown gate. When a file processes faster than realtime (typical
-/// — 1 s of audio takes ~80 ms of inference), two detections that are
-/// 1.5 s apart in the file may collapse to ~120 ms apart in wall time,
-/// inside the cooldown window, and the second one is dropped. Acceptable
-/// for v0.2.0; v0.3.0 should refactor `Detector::update` to take a
-/// generic time source.
+/// Cooldown is virtual-time-correct: each frame advances the
+/// detector's clock by the input frame's nominal 80 ms, regardless of
+/// how fast the wall clock processes the file. Two utterances 1.5 s
+/// apart in the recording register 1.5 s apart in detector time even
+/// if the file finishes in 100 ms of CPU.
 pub struct TransientPipeline {
     inference: crate::inference::InferencePipeline,
     detectors: Vec<crate::detector::Detector>,
@@ -147,6 +155,10 @@ impl TransientPipeline {
 
     /// Run until `frames` closes. Returns once the last frame is processed.
     pub async fn run(mut self, mut frames: mpsc::Receiver<horchd_client::AudioFrame>) {
+        // Each input frame is exactly 1280 samples at 16 kHz = 80 ms of audio.
+        const FRAME_DURATION: Duration = Duration::from_millis(80);
+
+        let mut frame_idx: u64 = 0;
         while let Some(frame) = frames.recv().await {
             let result = tokio::task::block_in_place(|| self.inference.process(&frame));
             let scores = match result {
@@ -156,16 +168,19 @@ impl TransientPipeline {
                     continue;
                 }
             };
-            let now = std::time::Instant::now();
+            let virtual_elapsed = FRAME_DURATION
+                .checked_mul(u32::try_from(frame_idx).unwrap_or(u32::MAX))
+                .unwrap_or(Duration::MAX);
             for (det, (name, score)) in self.detectors.iter_mut().zip(scores.iter()) {
                 debug_assert_eq!(name, &det.name, "detector/classifier order mismatch");
-                let Some(event) = det.update(f64::from(*score), now) else {
+                let Some(event) = det.update(f64::from(*score), virtual_elapsed) else {
                     continue;
                 };
                 for sink in &self.sinks {
                     sink.emit_detection(&event).await;
                 }
             }
+            frame_idx = frame_idx.saturating_add(1);
         }
     }
 }

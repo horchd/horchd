@@ -20,7 +20,7 @@ use zbus::object_server::SignalEmitter;
 
 use crate::AudioCmd;
 use crate::audio::{AudioStats, FileSource};
-use crate::detector::{self, Detector};
+use crate::detector::Detector;
 use crate::inference::{Classifier, InferencePipeline, InferenceStats, Preprocessor};
 use crate::persist;
 use crate::pipeline::TransientPipeline;
@@ -453,17 +453,19 @@ impl Daemon {
             .start()
             .map_err(|e| invalid_args(format!("opening WAV: {e:#}")))?;
 
-        let start_us = detector::monotonic_us();
         TransientPipeline::new(inference, detectors, sinks)
             .run(frames)
             .await;
         // Explicit drop — releases the WAV file handle and decoder task.
         drop(source);
 
+        // Detector now stamps Detection.timestamp_us with the
+        // file-relative microsecond offset (TransientPipeline drives
+        // the detector's clock from a virtual frame counter, not wall
+        // time). Just convert µs → ms for the wire-level entry.
         let mut entries = Vec::new();
         while let Ok(d) = rx.try_recv() {
-            let elapsed_us = d.timestamp_us.saturating_sub(start_us);
-            entries.push((d.name, d.score, elapsed_us / 1000));
+            entries.push((d.name, d.score, d.timestamp_us / 1000));
         }
         Ok(entries)
     }
