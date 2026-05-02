@@ -1,8 +1,9 @@
 //! Detection sink abstraction.
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Detection {
     pub name: String,
     pub score: f64,
@@ -11,7 +12,7 @@ pub struct Detection {
     pub timestamp_us: u64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScoreSnapshot {
     pub name: String,
     pub score: f64,

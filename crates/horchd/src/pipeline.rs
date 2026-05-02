@@ -45,6 +45,12 @@ impl Pipeline {
     /// Spawn an emitter task that forwards every Detection and
     /// ScoreSnapshot to `sink`. Returned `JoinHandle` can be aborted to
     /// stop the sink without affecting other subscribers.
+    ///
+    /// Cancellation: `JoinHandle::abort` is **hard** — the task is
+    /// dropped at the next `.await` without giving the sink a chance to
+    /// flush. For sinks that need a graceful drain (Wyoming TCP
+    /// connections in Phase D), wire a `tokio_util::sync::CancellationToken`
+    /// through the sink and select on it in the emitter loop.
     pub fn add_sink(&self, sink: Arc<dyn DetectionSink>) -> JoinHandle<()> {
         spawn_sink_emitter(
             sink,
