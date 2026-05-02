@@ -1,37 +1,24 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use horchd::audio::{AudioStats, MicSource};
+use horchd::pipeline::Pipeline;
+use horchd::sink::DBusSink;
 use horchd::{AudioCmd, audio, detector, inference, persist, service, state};
-use horchd_client::{Config, WakewordEvent};
-use tokio::sync::{broadcast, mpsc};
+use horchd_client::{AudioSource, Config, DetectionSink};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tracing_subscriber::EnvFilter;
-use zbus::Connection;
-use zbus::object_server::SignalEmitter;
 
 const DBUS_NAME: &str = "xyz.horchd.Daemon";
 const DBUS_PATH: &str = "/xyz/horchd/Daemon";
 
-/// Tokio mpsc capacity for raw audio frames.
 /// 16 frames * 80 ms = 1.28 s of headroom against inference back-pressure.
 const AUDIO_CHANNEL_CAPACITY: usize = 16;
 
-/// Broadcast capacity for `Detected` events.
-const EVENT_BROADCAST_CAPACITY: usize = 64;
-
-/// Broadcast capacity for the higher-rate `ScoreSnapshot` channel.
-/// At ~5 Hz × N wakewords, 256 leaves dozens of seconds of headroom for
-/// any slow subscriber.
-const SCORE_BROADCAST_CAPACITY: usize = 256;
-
-/// Minimum wall-clock gap between consecutive `ScoreSnapshot` emissions
-/// per wakeword. Inference fires ~12.5 Hz; throttling to 5 Hz keeps the
-/// bus quiet while still feeling live to a UI meter.
-const SCORE_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(200);
-
-/// Stats log cadence.
 const STATS_LOG_INTERVAL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Parser)]
@@ -96,46 +83,14 @@ async fn main() -> Result<()> {
         .iter()
         .map(|w| detector::Detector::new(w.name.clone(), w.threshold, w.cooldown_ms, w.enabled))
         .collect();
-    let pipeline = inference::InferencePipeline::new(preprocessor, classifiers);
+    let inference_pipeline = inference::InferencePipeline::new(preprocessor, classifiers);
 
-    let shared_state = state::DaemonState::new(config, cli.config.clone(), pipeline, detectors);
-
-    let audio_stats = Arc::new(audio::AudioStats::new());
-    let initial_device = {
-        let s = shared_state.lock().await;
-        s.config.engine.device.clone()
-    };
-    let (mut audio_handle, frames) = audio::start(
-        &initial_device,
-        AUDIO_CHANNEL_CAPACITY,
-        Arc::clone(&audio_stats),
-    )
-    .context("starting audio capture")?;
+    let shared_state =
+        state::DaemonState::new(config, cli.config.clone(), inference_pipeline, detectors);
+    let audio_stats = Arc::new(AudioStats::new());
     let inference_stats = Arc::new(inference::InferenceStats::new());
 
-    let (event_tx, _) = broadcast::channel::<WakewordEvent>(EVENT_BROADCAST_CAPACITY);
-    let (score_tx, _) = broadcast::channel::<(String, f64)>(SCORE_BROADCAST_CAPACITY);
     let (audio_cmd_tx, mut audio_cmd_rx) = mpsc::channel::<AudioCmd>(8);
-
-    // Subscribe BEFORE spawning the inference task so we can't lose any
-    // events fired between spawn and the first `subscribe()` call. The
-    // signal-emitter tasks pick up these `Receiver`s by move below.
-    let events_rx = event_tx.subscribe();
-    let scores_rx = score_tx.subscribe();
-
-    let mut inference_handle = tokio::spawn(run_inference(
-        frames,
-        Arc::clone(&shared_state),
-        event_tx.clone(),
-        score_tx.clone(),
-        Arc::clone(&inference_stats),
-    ));
-    tokio::spawn(log_stats(
-        Arc::clone(&audio_stats),
-        Arc::clone(&inference_stats),
-        STATS_LOG_INTERVAL,
-    ));
-
     let daemon = service::Daemon::new(
         Arc::clone(&shared_state),
         Arc::clone(&audio_stats),
@@ -154,8 +109,29 @@ async fn main() -> Result<()> {
         "registered on session bus"
     );
 
-    tokio::spawn(emit_signals(conn.clone(), events_rx));
-    tokio::spawn(emit_score_snapshots(conn.clone(), scores_rx));
+    let pipeline = Arc::new(Pipeline::new(
+        Arc::clone(&shared_state),
+        Arc::clone(&inference_stats),
+    ));
+    // Subscribe BEFORE the first source starts: events fired before a
+    // sink subscribes are dropped.
+    let dbus_sink: Arc<dyn DetectionSink> = Arc::new(DBusSink::new(conn.clone()));
+    let _dbus_handle = pipeline.add_sink(dbus_sink);
+
+    let initial_device = shared_state.lock().await.config.engine.device.clone();
+    let mut mic = MicSource::new(
+        initial_device,
+        AUDIO_CHANNEL_CAPACITY,
+        Arc::clone(&audio_stats),
+    );
+    let frames = mic.start().context("starting audio capture")?;
+    let mut inference_handle = spawn_inference(Arc::clone(&pipeline), frames);
+
+    tokio::spawn(log_stats(
+        Arc::clone(&audio_stats),
+        Arc::clone(&inference_stats),
+        STATS_LOG_INTERVAL,
+    ));
 
     loop {
         tokio::select! {
@@ -171,13 +147,11 @@ async fn main() -> Result<()> {
                         let res = swap_device(
                             &name,
                             persist,
-                            &mut audio_handle,
+                            &mut mic,
                             &mut inference_handle,
                             &shared_state,
                             &audio_stats,
-                            &inference_stats,
-                            &event_tx,
-                            &score_tx,
+                            &pipeline,
                         )
                         .await;
                         let _ = reply.send(res);
@@ -186,36 +160,43 @@ async fn main() -> Result<()> {
             }
         }
     }
-    drop(audio_handle);
+    drop(mic);
     tracing::info!("shutdown");
     Ok(())
+}
+
+fn spawn_inference(
+    pipeline: Arc<Pipeline>,
+    frames: mpsc::Receiver<horchd_client::AudioFrame>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move { pipeline.run(frames).await })
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn swap_device(
     name: &str,
     persist: bool,
-    audio_handle: &mut audio::AudioHandle,
-    inference_handle: &mut tokio::task::JoinHandle<()>,
+    mic: &mut MicSource,
+    inference_handle: &mut JoinHandle<()>,
     shared_state: &state::SharedState,
-    audio_stats: &Arc<audio::AudioStats>,
-    inference_stats: &Arc<inference::InferenceStats>,
-    event_tx: &broadcast::Sender<WakewordEvent>,
-    score_tx: &broadcast::Sender<(String, f64)>,
+    audio_stats: &Arc<AudioStats>,
+    pipeline: &Arc<Pipeline>,
 ) -> Result<()> {
     tracing::info!(name, "switching audio input device");
-    let (new_handle, frames) = audio::start(name, AUDIO_CHANNEL_CAPACITY, Arc::clone(audio_stats))
+    let mut new_mic = MicSource::new(
+        name.to_string(),
+        AUDIO_CHANNEL_CAPACITY,
+        Arc::clone(audio_stats),
+    );
+    // Open the new device BEFORE tearing down the old one. If this
+    // fails the running mic stays untouched.
+    let frames = new_mic
+        .start()
         .with_context(|| format!("opening audio device {name:?}"))?;
 
     inference_handle.abort();
-    *audio_handle = new_handle; // drops old; cpal stream stops
-    *inference_handle = tokio::spawn(run_inference(
-        frames,
-        Arc::clone(shared_state),
-        event_tx.clone(),
-        score_tx.clone(),
-        Arc::clone(inference_stats),
-    ));
+    *mic = new_mic; // drops old; cpal stream stops
+    *inference_handle = spawn_inference(Arc::clone(pipeline), frames);
 
     {
         let mut s = shared_state.lock().await;
@@ -232,119 +213,8 @@ async fn swap_device(
     Ok(())
 }
 
-async fn run_inference(
-    mut frames: tokio::sync::mpsc::Receiver<audio::Frame>,
-    shared: state::SharedState,
-    events: broadcast::Sender<WakewordEvent>,
-    scores_tx: broadcast::Sender<(String, f64)>,
-    stats: Arc<inference::InferenceStats>,
-) {
-    let mut last_snapshot: Option<Instant> = None;
-    while let Some(frame) = frames.recv().await {
-        let mut s = shared.lock().await;
-        let started = Instant::now();
-        let result = tokio::task::block_in_place(|| s.pipeline.process(&frame));
-        let elapsed = started.elapsed();
-        let scores = match result {
-            Ok(scores) => scores,
-            Err(err) => {
-                tracing::error!(?err, "inference failed");
-                continue;
-            }
-        };
-        stats.record_score(elapsed);
-
-        let now = Instant::now();
-        let snapshot_due = last_snapshot
-            .map(|t| now.duration_since(t) >= SCORE_SNAPSHOT_INTERVAL)
-            .unwrap_or(true);
-
-        for (det, (name, score)) in s.detectors.iter_mut().zip(scores.iter()) {
-            debug_assert_eq!(name, &det.name, "detector/classifier order mismatch");
-            let score_f64 = f64::from(*score);
-            if snapshot_due {
-                let _ = scores_tx.send((name.clone(), score_f64));
-            }
-            let Some(event) = det.update(score_f64, now) else {
-                continue;
-            };
-            tracing::info!(
-                name = %event.name,
-                score = event.score,
-                ts_us = event.timestamp_us,
-                "wakeword detected"
-            );
-            let _ = events.send(event);
-        }
-        if snapshot_due {
-            last_snapshot = Some(now);
-        }
-    }
-    tracing::warn!("audio frame channel closed");
-}
-
-async fn emit_signals(conn: Connection, mut events: broadcast::Receiver<WakewordEvent>) {
-    use tokio::sync::broadcast::error::RecvError;
-    loop {
-        match events.recv().await {
-            Ok(event) => emit_one(&conn, &event).await,
-            Err(RecvError::Lagged(n)) => {
-                tracing::warn!(skipped = n, "signal emitter lagged behind broadcast")
-            }
-            Err(RecvError::Closed) => {
-                tracing::info!("event broadcast closed; signal emitter exiting");
-                break;
-            }
-        }
-    }
-}
-
-async fn emit_one(conn: &Connection, event: &WakewordEvent) {
-    let emitter = match SignalEmitter::new(conn, DBUS_PATH) {
-        Ok(e) => e,
-        Err(err) => {
-            tracing::error!(?err, "creating SignalEmitter");
-            return;
-        }
-    };
-    if let Err(err) =
-        service::Daemon::detected(&emitter, &event.name, event.score, event.timestamp_us).await
-    {
-        tracing::error!(?err, name = %event.name, "emitting Detected signal");
-    }
-}
-
-async fn emit_score_snapshots(conn: Connection, mut scores: broadcast::Receiver<(String, f64)>) {
-    use tokio::sync::broadcast::error::RecvError;
-    loop {
-        match scores.recv().await {
-            Ok((name, score)) => emit_score(&conn, &name, score).await,
-            Err(RecvError::Lagged(n)) => {
-                tracing::debug!(skipped = n, "score snapshot emitter lagged");
-            }
-            Err(RecvError::Closed) => {
-                tracing::info!("score broadcast closed; snapshot emitter exiting");
-                break;
-            }
-        }
-    }
-}
-
-async fn emit_score(conn: &Connection, name: &str, score: f64) {
-    let emitter = match SignalEmitter::new(conn, DBUS_PATH) {
-        Ok(e) => e,
-        Err(err) => {
-            tracing::error!(?err, "creating SignalEmitter");
-            return;
-        }
-    };
-    if let Err(err) = service::Daemon::score_snapshot(&emitter, name, score).await {
-        tracing::warn!(?err, name, "emitting ScoreSnapshot signal");
-    }
-}
-
 async fn log_stats(
-    audio: Arc<audio::AudioStats>,
+    audio: Arc<AudioStats>,
     inference: Arc<inference::InferenceStats>,
     interval: Duration,
 ) {

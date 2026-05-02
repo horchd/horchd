@@ -13,8 +13,11 @@ description = "Shared types & D-Bus interface definitions for the horchd ecosyst
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
+async-trait = "0.1"
 serde.workspace = true
 shellexpand.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 toml.workspace = true
 zbus.workspace = true

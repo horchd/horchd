@@ -8,10 +8,10 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use horchd::audio_for_bench::{AudioStats, CallbackState, FRAME_SAMPLES, Frame};
+use horchd::audio_for_bench::{AudioFrame, AudioStats, CallbackState, FRAME_SAMPLES};
 use tokio::sync::mpsc;
 
-fn drain(rx: &mut mpsc::Receiver<Frame>) {
+fn drain(rx: &mut mpsc::Receiver<AudioFrame>) {
     while rx.try_recv().is_ok() {}
 }
 

@@ -2,14 +2,21 @@
 //!
 //! Consumed by `horchd` (server side: owns inference + config file) and
 //! by `horchctl` / `horchd-gui` (client side: drive the daemon over the
-//! session bus).
+//! session bus). The [`audio`] and [`sink`] modules expose the
+//! `AudioSource` / `DetectionSink` traits that let external integrators
+//! plug in alternative inputs (file, stream, Wyoming) and outputs
+//! (Wyoming, custom transports).
 
+pub mod audio;
 pub mod config;
 pub mod dbus;
 pub mod error;
-pub mod event;
+pub mod sink;
 
+pub use audio::{
+    AudioFrame, AudioSource, FRAME_SAMPLES, SourceDescriptor, SourceKind, TARGET_SAMPLE_RATE,
+};
 pub use config::{Config, Engine, MAX_COOLDOWN_MS, SharedModels, Wakeword};
 pub use dbus::{DaemonProxy, WakewordSnapshot};
 pub use error::{Error, Result};
-pub use event::WakewordEvent;
+pub use sink::{Detection, DetectionSink, ScoreSnapshot};
