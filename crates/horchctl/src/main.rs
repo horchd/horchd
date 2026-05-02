@@ -22,20 +22,29 @@ struct Cli {
 enum Command {
     /// Print daemon health (running, audio fps, score fps, mic level, loaded wakewords).
     Status,
-    /// List configured wakewords as a table.
-    List,
     /// Subscribe to the `Detected` signal and print one line per fire. Reconnects on daemon restart.
     Monitor,
+    /// Re-read the config file and reconcile in-memory state.
+    Reload,
 
-    /// Set a wakeword's threshold. Transient by default; pass `--save` to persist to TOML.
-    Threshold(ThresholdArgs),
-    /// Set a wakeword's cooldown in milliseconds. Use `--save` to persist.
-    Cooldown(CooldownArgs),
-    /// Enable a wakeword.
-    Enable(NameOnly),
-    /// Disable a wakeword (the model stays loaded, just stops firing).
-    Disable(NameOnly),
+    /// Run all configured wakewords against a WAV file off the live mic
+    /// pipeline. Prints one line per detection.
+    Process(ProcessArgs),
 
+    /// Manage wakewords (list, add, remove, enable, disable, threshold,
+    /// cooldown, import).
+    #[command(subcommand)]
+    Wakeword(WakewordCommand),
+
+    /// Manage the daemon's audio capture device.
+    #[command(subcommand)]
+    Device(DeviceCommand),
+}
+
+#[derive(Debug, Subcommand)]
+enum WakewordCommand {
+    /// List configured wakewords as a table.
+    List,
     /// Register a new wakeword. Validates the model and persists to TOML.
     Add(AddArgs),
     /// Remove a wakeword. The on-disk model file is preserved unless `--purge`.
@@ -44,18 +53,27 @@ enum Command {
         #[arg(long)]
         purge: bool,
     },
-
-    /// Re-read the config file and reconcile in-memory state.
-    Reload,
-
+    /// Enable a wakeword.
+    Enable(NameOnly),
+    /// Disable a wakeword (the model stays loaded, just stops firing).
+    Disable(NameOnly),
+    /// Set a wakeword's threshold. Transient by default; pass `--save` to persist to TOML.
+    Threshold(ThresholdArgs),
+    /// Set a wakeword's cooldown in milliseconds. Use `--save` to persist.
+    Cooldown(CooldownArgs),
     /// Import a wakeword model from an HTTP(S) URL or a local path,
     /// stage it under `~/.local/share/horchd/models/`, and register it
     /// with the daemon.
     Import(ImportArgs),
+}
 
-    /// Run all configured wakewords against a WAV file off the live mic
-    /// pipeline. Prints one line per detection.
-    Process(ProcessArgs),
+#[derive(Debug, Subcommand)]
+enum DeviceCommand {
+    /// List input devices the daemon's cpal host can see.
+    List,
+    /// Switch the daemon's audio capture device. `--save` persists to
+    /// `[engine].device` in `config.toml`.
+    Set(DeviceSetArgs),
 }
 
 #[derive(Debug, Args)]
@@ -66,6 +84,16 @@ struct ProcessArgs {
     /// Emit one JSON object per line instead of the human-readable table.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Args)]
+struct DeviceSetArgs {
+    /// cpal device name (use `horchctl device list` to enumerate). Pass
+    /// `default` to follow the host's default input.
+    name: String,
+    /// Persist the change to `[engine].device` in `config.toml`.
+    #[arg(long)]
+    save: bool,
 }
 
 #[derive(Debug, Args)]
@@ -141,9 +169,22 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Command::Status => status(&proxy).await,
-        Command::List => list(&proxy).await,
         Command::Monitor => monitor(&proxy).await,
-        Command::Threshold(args) => {
+        Command::Reload => {
+            proxy.reload().await.context("Reload")?;
+            println!("reloaded");
+            Ok(())
+        }
+        Command::Process(args) => run_process(&proxy, args).await,
+        Command::Wakeword(cmd) => run_wakeword(&proxy, cmd).await,
+        Command::Device(cmd) => run_device(&proxy, cmd).await,
+    }
+}
+
+async fn run_wakeword(proxy: &DaemonProxy<'_>, cmd: WakewordCommand) -> Result<()> {
+    match cmd {
+        WakewordCommand::List => list(proxy).await,
+        WakewordCommand::Threshold(args) => {
             validate_threshold(args.value)?;
             proxy
                 .set_threshold(&args.name, args.value, args.save)
@@ -152,7 +193,7 @@ async fn main() -> Result<()> {
             println!("threshold of {:?} set to {}", args.name, args.value);
             Ok(())
         }
-        Command::Cooldown(args) => {
+        WakewordCommand::Cooldown(args) => {
             validate_cooldown(args.value)?;
             proxy
                 .set_cooldown(&args.name, args.value, args.save)
@@ -161,7 +202,7 @@ async fn main() -> Result<()> {
             println!("cooldown of {:?} set to {} ms", args.name, args.value);
             Ok(())
         }
-        Command::Enable(args) => {
+        WakewordCommand::Enable(args) => {
             proxy
                 .set_enabled(&args.name, true, args.save)
                 .await
@@ -169,7 +210,7 @@ async fn main() -> Result<()> {
             println!("{:?} enabled", args.name);
             Ok(())
         }
-        Command::Disable(args) => {
+        WakewordCommand::Disable(args) => {
             proxy
                 .set_enabled(&args.name, false, args.save)
                 .await
@@ -177,7 +218,7 @@ async fn main() -> Result<()> {
             println!("{:?} disabled", args.name);
             Ok(())
         }
-        Command::Add(args) => {
+        WakewordCommand::Add(args) => {
             validate_name(&args.name)?;
             validate_threshold(args.threshold)?;
             validate_cooldown(args.cooldown)?;
@@ -193,7 +234,7 @@ async fn main() -> Result<()> {
             println!("added wakeword {:?} (model {})", args.name, model_str);
             Ok(())
         }
-        Command::Remove { name, purge } => {
+        WakewordCommand::Remove { name, purge } => {
             let model_path = if purge {
                 proxy
                     .list_wakewords()
@@ -215,13 +256,34 @@ async fn main() -> Result<()> {
             }
             Ok(())
         }
-        Command::Reload => {
-            proxy.reload().await.context("Reload")?;
-            println!("reloaded");
+        WakewordCommand::Import(args) => run_import(proxy, args).await,
+    }
+}
+
+async fn run_device(proxy: &DaemonProxy<'_>, cmd: DeviceCommand) -> Result<()> {
+    match cmd {
+        DeviceCommand::List => {
+            let devices = proxy
+                .list_input_devices()
+                .await
+                .context("ListInputDevices")?;
+            if devices.is_empty() {
+                println!("(no input devices found)");
+            } else {
+                for d in devices {
+                    println!("  {d}");
+                }
+            }
             Ok(())
         }
-        Command::Import(args) => run_import(&proxy, args).await,
-        Command::Process(args) => run_process(&proxy, args).await,
+        DeviceCommand::Set(args) => {
+            proxy
+                .set_input_device(&args.name, args.save)
+                .await
+                .with_context(|| format!("SetInputDevice({:?})", args.name))?;
+            println!("input device set to {:?}", args.name);
+            Ok(())
+        }
     }
 }
 

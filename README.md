@@ -39,7 +39,7 @@ you want a native daemon instead of a Python process, and loads any
 - **Hot-reload** — edit the TOML, `horchctl reload`, never drops the audio thread
 - **Trainer-agnostic** — bring any
   [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible
-  `.onnx` classifier; `horchctl import` pulls from any URL or local path
+  `.onnx` classifier; `horchctl wakeword import` pulls from any URL or local path
 - **Future**: dual-engine support for [`micro-wake-word`](https://github.com/OHF-Voice/micro-wake-word) (the engine ESPHome / Home Assistant Voice uses) — see [roadmap](#roadmap)
 
 ## How it works
@@ -201,7 +201,7 @@ oww=$(python -c 'import openwakeword, pathlib; print(pathlib.Path(openwakeword._
 cp "$oww/hey_jarvis_v0.1.onnx" ~/.local/share/horchd/models/
 
 # Register it with the daemon (validates shape, loads it, persists to TOML)
-horchctl add hey_jarvis --model ~/.local/share/horchd/models/hey_jarvis_v0.1.onnx
+horchctl wakeword add hey_jarvis --model ~/.local/share/horchd/models/hey_jarvis_v0.1.onnx
 
 # Verify
 horchctl status
@@ -214,7 +214,7 @@ For a custom wakeword you currently have one supported path:
    [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible
    classifier (input `(1, 16, 96)`, output `(1, 1)`) yourself, drop the
    `.onnx` into `~/.local/share/horchd/models/`, and
-   `horchctl add <name> --model …`. Any pipeline that exports a model
+   `horchctl wakeword add <name> --model …`. Any pipeline that exports a model
    matching that shape will work; the daemon validates it at register-time.
 
 The **in-app Train tab in `horchd-gui`** wraps the bundled
@@ -319,28 +319,32 @@ The reference CLI client. Same D-Bus surface, no extra privileges.
 
 ```bash
 horchctl status                                   # daemon health + loaded wakewords
-horchctl list                                     # tabular view
+horchctl wakeword list                                     # tabular view
 horchctl monitor                                  # tail Detected signals live
 
-horchctl threshold jarvis 0.45                    # transient (resets on restart)
-horchctl threshold jarvis 0.45 --save             # persist to config.toml (preserves comments)
-horchctl cooldown  jarvis 1200 --save
-horchctl enable    jarvis --save
-horchctl disable   jarvis --save
+horchctl wakeword threshold jarvis 0.45                    # transient (resets on restart)
+horchctl wakeword threshold jarvis 0.45 --save             # persist to config.toml (preserves comments)
+horchctl wakeword cooldown  jarvis 1200 --save
+horchctl wakeword enable    jarvis --save
+horchctl wakeword disable   jarvis --save
 
-horchctl add wetter --model ~/.local/share/horchd/models/wetter.onnx --threshold 0.55
-horchctl remove wetter            # keeps the .onnx on disk
-horchctl remove wetter --purge    # also deletes the .onnx + .onnx.data sibling
+horchctl wakeword add wetter --model ~/.local/share/horchd/models/wetter.onnx --threshold 0.55
+horchctl wakeword remove wetter            # keeps the .onnx on disk
+horchctl wakeword remove wetter --purge    # also deletes the .onnx + .onnx.data sibling
 
 horchctl reload                   # re-read config.toml; hot-keep unchanged models
 
 # import a model from a URL or local path; stages it under ~/.local/share/horchd/models/
-horchctl import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx
-horchctl import ~/Downloads/my-model.onnx --as my_wake --threshold 0.65
-horchctl import https://example.com/m.onnx --as wake --force   # re-download + re-register
+horchctl wakeword import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx
+horchctl wakeword import ~/Downloads/my-model.onnx --as my_wake --threshold 0.65
+horchctl wakeword import https://example.com/m.onnx --as wake --force   # re-download + re-register
 
 horchctl process recording.wav         # run wakewords against a file (human output)
 horchctl process recording.wav --json  # one JSON object per detection, jq-friendly
+
+horchctl device list                            # what input devices does cpal see?
+horchctl device set "PipeWire Sound Server"     # transient hot-swap
+horchctl device set default --save              # persist to config.toml
 ```
 
 All mutator commands either error out cleanly (validates shape /
@@ -484,7 +488,7 @@ absent — see `crates/gui/src/lib/dbus.ts`.
 - [x] openWakeWord pipeline (this release)
 - [x] D-Bus mutation methods + comment-preserving TOML persist
 - [x] horchd-gui Tauri tray + control panel
-- [x] `horchctl import <url-or-path>` — one-shot fetch + register from any URL or local file
+- [x] `horchctl wakeword import <url-or-path>` — one-shot fetch + register from any URL or local file
 - [x] `ScoreSnapshot(name, score)` D-Bus signal at ~5 Hz so subscribers can render live meters without polling
 - [ ] [micro-wake-word](https://github.com/OHF-Voice/micro-wake-word)
       backend behind an `engine = "openwakeword" | "microwakeword"`
