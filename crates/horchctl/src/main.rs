@@ -48,9 +48,9 @@ enum Command {
     /// Re-read the config file and reconcile in-memory state.
     Reload,
 
-    /// Download an upstream openWakeWord pretrained model into
-    /// `~/.local/share/horchd/models/` and register it with the daemon.
-    /// Use `--list` to see what's available.
+    /// Import a wakeword model from an HTTP(S) URL or a local path,
+    /// stage it under `~/.local/share/horchd/models/`, and register it
+    /// with the daemon.
     Import(ImportArgs),
 }
 
@@ -68,13 +68,11 @@ struct AddArgs {
 
 #[derive(Debug, Args)]
 struct ImportArgs {
-    /// Pretrained model name (e.g. `hey_jarvis_v0.1`). Omit when using `--list`.
-    name: Option<String>,
-    /// Print the catalogue of known pretrained models and exit.
-    #[arg(long)]
-    list: bool,
-    /// Register the wakeword under a different name than the model file.
-    #[arg(long = "as", value_name = "ALIAS")]
+    /// Source of the model: an `http(s)://` URL or a local filesystem path.
+    source: String,
+    /// Register the wakeword under this name. Defaults to the model's
+    /// filename stem, sanitized to ASCII letters / digits / `_` / `-`.
+    #[arg(long = "as", value_name = "NAME")]
     register_as: Option<String>,
     /// Initial threshold.
     #[arg(long, default_value_t = horchd_client::Wakeword::DEFAULT_THRESHOLD)]
@@ -82,7 +80,8 @@ struct ImportArgs {
     /// Initial cooldown in milliseconds.
     #[arg(long, default_value_t = horchd_client::Wakeword::DEFAULT_COOLDOWN_MS)]
     cooldown: u32,
-    /// Re-download even if the file already exists locally.
+    /// Re-download / re-copy + re-register even if the model is
+    /// already staged and registered.
     #[arg(long)]
     force: bool,
 }
@@ -118,14 +117,6 @@ struct NameOnly {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-
-    // import --list and the like don't need the daemon.
-    if let Command::Import(args) = &cli.command
-        && args.list
-    {
-        print_catalogue();
-        return Ok(());
-    }
 
     let conn = zbus::Connection::session()
         .await
@@ -219,62 +210,45 @@ async fn main() -> Result<()> {
     }
 }
 
-const PRETRAINED_BASE: &str = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1";
-
-const PRETRAINED_CATALOGUE: &[(&str, &str)] = &[
-    ("alexa_v0.1", "Alexa"),
-    ("hey_jarvis_v0.1", "Hey Jarvis"),
-    ("hey_mycroft_v0.1", "Hey Mycroft"),
-    ("hey_rhasspy_v0.1", "Hey Rhasspy"),
-    ("timer_v0.1", "Timer / set a timer"),
-    ("weather_v0.1", "Weather"),
-];
-
-/// Maximum bytes we accept from the upstream download — defends against
-/// hostile redirects or upstream bugs filling `~/.local/share`.
+/// Defends against hostile redirects or upstream bugs filling
+/// `~/.local/share`. 50 MB is generous — every openWakeWord classifier
+/// is ≤ 1 MB.
 const MAX_DOWNLOAD_BYTES: u64 = 50 * 1024 * 1024;
 
-fn print_catalogue() {
-    println!("Upstream openWakeWord pretrained models");
-    println!("---------------------------------------");
-    let name_w = PRETRAINED_CATALOGUE
-        .iter()
-        .map(|(n, _)| n.len())
-        .max()
-        .unwrap_or(20);
-    for (entry, descr) in PRETRAINED_CATALOGUE {
-        println!("  {entry:<name_w$}  {descr}");
-    }
-    println!("\nUsage:  horchctl import <name> [--as alias] [--threshold 0.5]");
-}
-
 async fn run_import(proxy: &DaemonProxy<'_>, args: ImportArgs) -> Result<()> {
-    let name = args
-        .name
-        .ok_or_else(|| anyhow::anyhow!("missing model name; try `horchctl import --list`"))?;
-    if !PRETRAINED_CATALOGUE.iter().any(|(n, _)| *n == name) {
-        bail!("{name:?} is not in the pretrained catalogue; run `--list` to see options");
+    let source = args.source.trim();
+    if source.is_empty() {
+        bail!("source must be a non-empty URL or path");
     }
-    let register_as = args.register_as.clone().unwrap_or_else(|| name.clone());
-    validate_name(&register_as)?;
+    let basename = derive_basename(source)?;
+    let register_as = match args.register_as.clone() {
+        Some(n) => {
+            validate_name(&n)?;
+            n
+        }
+        None => derive_default_name(&basename)?,
+    };
     validate_threshold(args.threshold)?;
     validate_cooldown(args.cooldown)?;
 
     let dest_dir = models_dir()?;
     std::fs::create_dir_all(&dest_dir)
         .with_context(|| format!("creating {}", dest_dir.display()))?;
-    let dest = dest_dir.join(format!("{name}.onnx"));
+    let dest = dest_dir.join(&basename);
 
-    if dest.exists() && !args.force {
-        eprintln!(
-            "note: {} already exists (use --force to re-download)",
-            dest.display()
-        );
+    if is_url(source) {
+        if dest.exists() && !args.force {
+            eprintln!(
+                "note: {} already exists (use --force to re-download)",
+                dest.display()
+            );
+        } else {
+            let digest = download(source, &dest).await?;
+            println!("downloaded → {}", dest.display());
+            println!("sha256:    {digest}");
+        }
     } else {
-        let url = format!("{PRETRAINED_BASE}/{name}.onnx");
-        let digest = download(&url, &dest).await?;
-        println!("downloaded → {}", dest.display());
-        println!("sha256:    {digest}");
+        stage_local_path(std::path::Path::new(source), &dest, args.force)?;
     }
 
     let model_str = dest.to_string_lossy().into_owned();
@@ -291,6 +265,79 @@ async fn run_import(proxy: &DaemonProxy<'_>, args: ImportArgs) -> Result<()> {
         "registered wakeword {register_as:?} (model {})",
         dest.display()
     );
+    Ok(())
+}
+
+fn is_url(source: &str) -> bool {
+    source.starts_with("http://") || source.starts_with("https://")
+}
+
+/// Last URL path segment (before any `?` query) or local-file basename.
+fn derive_basename(source: &str) -> Result<String> {
+    if is_url(source) {
+        let trimmed = source.trim_end_matches('/');
+        let last = trimmed.rsplit_once('/').map_or(trimmed, |(_, l)| l);
+        let no_query = last.split_once('?').map_or(last, |(p, _)| p);
+        if no_query.is_empty() {
+            bail!("could not derive a filename from URL {source:?}");
+        }
+        Ok(no_query.to_string())
+    } else {
+        std::path::Path::new(source)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| anyhow::anyhow!("could not derive a filename from path {source:?}"))
+    }
+}
+
+/// Sanitize the file stem into a daemon-acceptable wakeword name: keep
+/// ASCII letters/digits/`_`/`-`, replace everything else with `_`.
+fn derive_default_name(basename: &str) -> Result<String> {
+    let stem = std::path::Path::new(basename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(basename);
+    let sanitized: String = stem
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if sanitized.is_empty() || sanitized.starts_with('-') {
+        bail!("could not derive a wakeword name from {basename:?}; pass `--as <name>`");
+    }
+    Ok(sanitized)
+}
+
+fn stage_local_path(src: &std::path::Path, dest: &std::path::Path, force: bool) -> Result<()> {
+    if !src.exists() {
+        bail!("source {} does not exist", src.display());
+    }
+    if !src.is_file() {
+        bail!("source {} is not a regular file", src.display());
+    }
+    let src_canon =
+        std::fs::canonicalize(src).with_context(|| format!("canonicalizing {}", src.display()))?;
+    let same_as_dest = dest.canonicalize().map(|d| d == src_canon).unwrap_or(false);
+    if same_as_dest {
+        eprintln!("note: source already lives at {}", dest.display());
+        return Ok(());
+    }
+    if dest.exists() && !force {
+        eprintln!(
+            "note: {} already exists (use --force to overwrite)",
+            dest.display()
+        );
+        return Ok(());
+    }
+    std::fs::copy(&src_canon, dest)
+        .with_context(|| format!("copying {} → {}", src_canon.display(), dest.display()))?;
+    println!("copied → {}", dest.display());
     Ok(())
 }
 
@@ -534,5 +581,73 @@ async fn monitor_once(proxy: &DaemonProxy<'_>) -> Result<()> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn url_basename_strips_path_and_query() {
+        assert_eq!(
+            derive_basename("https://example.com/foo/bar/alexa_v0.1.onnx").unwrap(),
+            "alexa_v0.1.onnx"
+        );
+        assert_eq!(
+            derive_basename("http://x.io/m.onnx?token=abc&v=1").unwrap(),
+            "m.onnx"
+        );
+        assert_eq!(
+            derive_basename("https://x.io/path/").unwrap_or_default(),
+            "path"
+        );
+    }
+
+    #[test]
+    fn path_basename_picks_filename() {
+        assert_eq!(derive_basename("/tmp/foo/bar.onnx").unwrap(), "bar.onnx");
+        assert_eq!(derive_basename("relative/m.onnx").unwrap(), "m.onnx");
+        assert_eq!(
+            derive_basename("just-a-file.onnx").unwrap(),
+            "just-a-file.onnx"
+        );
+    }
+
+    #[test]
+    fn url_detection_only_accepts_http_schemes() {
+        assert!(is_url("http://x"));
+        assert!(is_url("https://x"));
+        assert!(!is_url("ftp://x"));
+        assert!(!is_url("file:///tmp/x.onnx"));
+        assert!(!is_url("./local"));
+        assert!(!is_url("/abs/path"));
+    }
+
+    #[test]
+    fn default_name_replaces_invalid_chars() {
+        assert_eq!(
+            derive_default_name("alexa_v0.1.onnx").unwrap(),
+            "alexa_v0_1"
+        );
+        assert_eq!(
+            derive_default_name("hey-jarvis.onnx").unwrap(),
+            "hey-jarvis"
+        );
+        assert_eq!(
+            derive_default_name("My Wakeword!.onnx").unwrap(),
+            "My_Wakeword_"
+        );
+    }
+
+    #[test]
+    fn default_name_rejects_dash_prefix() {
+        assert!(derive_default_name("-leading.onnx").is_err());
+    }
+
+    #[test]
+    fn default_name_falls_back_to_basename_without_stem() {
+        // No extension → use the whole thing
+        assert_eq!(derive_default_name("alexa").unwrap(), "alexa");
     }
 }

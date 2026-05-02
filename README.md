@@ -39,7 +39,7 @@ you want a native daemon instead of a Python process, and loads any
 - **Hot-reload** — edit the TOML, `horchctl reload`, never drops the audio thread
 - **Trainer-agnostic** — bring any
   [openWakeWord](https://github.com/dscripka/openWakeWord)-compatible
-  `.onnx` classifier; `horchctl import-pretrained` pulls the upstream catalogue
+  `.onnx` classifier; `horchctl import` pulls from any URL or local path
 - **Future**: dual-engine support for [`micro-wake-word`](https://github.com/OHF-Voice/micro-wake-word) (the engine ESPHome / Home Assistant Voice uses) — see [roadmap](#roadmap)
 
 ## How it works
@@ -334,9 +334,10 @@ horchctl remove wetter --purge    # also deletes the .onnx + .onnx.data sibling
 
 horchctl reload                   # re-read config.toml; hot-keep unchanged models
 
-horchctl import-pretrained --list                  # catalogue of upstream openWakeWord models
-horchctl import-pretrained hey_jarvis_v0.1         # download + register in one shot
-horchctl import-pretrained hey_jarvis_v0.1 --as jarvis --threshold 0.65
+# import a model from a URL or local path; stages it under ~/.local/share/horchd/models/
+horchctl import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx
+horchctl import ~/Downloads/my-model.onnx --as my_wake --threshold 0.65
+horchctl import https://example.com/m.onnx --as wake --force   # re-download + re-register
 ```
 
 All mutator commands either error out cleanly (validates shape /
@@ -453,7 +454,7 @@ absent — see `crates/gui/src/lib/dbus.ts`.
 - [x] openWakeWord pipeline (this release)
 - [x] D-Bus mutation methods + comment-preserving TOML persist
 - [x] horchd-gui Tauri tray + control panel
-- [x] `horchctl import-pretrained <name>` — one-shot fetch of upstream openWakeWord models
+- [x] `horchctl import <url-or-path>` — one-shot fetch + register from any URL or local file
 - [x] `ScoreSnapshot(name, score)` D-Bus signal at ~5 Hz so subscribers can render live meters without polling
 - [ ] [micro-wake-word](https://github.com/OHF-Voice/micro-wake-word)
       backend behind an `engine = "openwakeword" | "microwakeword"`
