@@ -64,7 +64,7 @@ impl Detector {
 
 /// `CLOCK_MONOTONIC` microseconds since system boot. Matches the
 /// wire format the `Detected` D-Bus signal advertises.
-fn monotonic_us() -> u64 {
+pub(crate) fn monotonic_us() -> u64 {
     let mut ts = libc::timespec {
         tv_sec: 0,
         tv_nsec: 0,

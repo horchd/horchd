@@ -13,17 +13,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use horchd_client::{Config, MAX_COOLDOWN_MS, Wakeword, WakewordSnapshot};
+use horchd_client::{Config, DetectionEntry, MAX_COOLDOWN_MS, Wakeword, WakewordSnapshot};
 use tokio::sync::{mpsc, oneshot};
 use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
 use crate::AudioCmd;
-use crate::audio::AudioStats;
-use crate::detector::Detector;
-use crate::inference::{Classifier, InferenceStats};
+use crate::audio::{AudioStats, FileSource};
+use crate::detector::{self, Detector};
+use crate::inference::{Classifier, InferencePipeline, InferenceStats, Preprocessor};
 use crate::persist;
+use crate::pipeline::TransientPipeline;
+use crate::sink::MpscSink;
 use crate::state::SharedState;
+use horchd_client::{AudioSource as _, DetectionSink};
 
 pub struct Daemon {
     state: SharedState,
@@ -380,6 +383,89 @@ impl Daemon {
         let mut s = self.state.lock().await;
         apply_reload_plan(&mut s, plan, loaded, new_config);
         Ok(())
+    }
+
+    /// Run all configured wakewords against an audio file off the live
+    /// mic pipeline. Loads a fresh isolated inference state per call;
+    /// the live mic stream is not disturbed.
+    pub async fn process_audio(&self, path: &str) -> zbus::fdo::Result<Vec<DetectionEntry>> {
+        let path = PathBuf::from(path);
+        if !path.is_absolute() {
+            return Err(invalid_args(format!(
+                "path must be absolute (got {:?})",
+                path.display()
+            )));
+        }
+        if !path.exists() {
+            return Err(invalid_args(format!(
+                "file does not exist: {}",
+                path.display()
+            )));
+        }
+        if !path.is_file() {
+            return Err(invalid_args(format!(
+                "not a regular file: {}",
+                path.display()
+            )));
+        }
+
+        // Snapshot just the bits we need under the lock, then release.
+        // This keeps the live mic pipeline unaffected during the
+        // (potentially long) file processing.
+        let (shared_models, wakewords) = {
+            let s = self.state.lock().await;
+            (
+                s.config.engine.shared_models.clone(),
+                s.config.wakewords.clone(),
+            )
+        };
+
+        // Load a fresh Preprocessor + Classifier set off-runtime.
+        // ~200 ms total for melspec + embedding + a couple of classifiers.
+        let inference =
+            tokio::task::spawn_blocking(move || -> anyhow::Result<InferencePipeline> {
+                let preprocessor =
+                    Preprocessor::new(&shared_models.melspectrogram, &shared_models.embedding)?;
+                let classifiers = wakewords
+                    .iter()
+                    .map(|w| Classifier::load(w.name.clone(), &w.model))
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                Ok(InferencePipeline::new(preprocessor, classifiers))
+            })
+            .await
+            .map_err(|e| failed(format!("inference setup join: {e}")))?
+            .map_err(|e| failed(format!("loading isolated inference state: {e:#}")))?;
+
+        let detectors: Vec<Detector> = {
+            let s = self.state.lock().await;
+            s.config
+                .wakewords
+                .iter()
+                .map(|w| Detector::new(w.name.clone(), w.threshold, w.cooldown_ms, w.enabled))
+                .collect()
+        };
+
+        let (mpsc_sink, mut rx) = MpscSink::new();
+        let sinks: Vec<Arc<dyn DetectionSink>> = vec![Arc::new(mpsc_sink)];
+
+        let mut source = FileSource::new(&path);
+        let frames = source
+            .start()
+            .map_err(|e| invalid_args(format!("opening WAV: {e:#}")))?;
+
+        let start_us = detector::monotonic_us();
+        TransientPipeline::new(inference, detectors, sinks)
+            .run(frames)
+            .await;
+        // Explicit drop — releases the WAV file handle and decoder task.
+        drop(source);
+
+        let mut entries = Vec::new();
+        while let Ok(d) = rx.try_recv() {
+            let elapsed_us = d.timestamp_us.saturating_sub(start_us);
+            entries.push((d.name, d.score, elapsed_us / 1000));
+        }
+        Ok(entries)
     }
 
     /// Emitted on the rising edge when a wakeword's score crosses its

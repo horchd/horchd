@@ -338,12 +338,42 @@ horchctl reload                   # re-read config.toml; hot-keep unchanged mode
 horchctl import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx
 horchctl import ~/Downloads/my-model.onnx --as my_wake --threshold 0.65
 horchctl import https://example.com/m.onnx --as wake --force   # re-download + re-register
+
+horchctl process recording.wav         # run wakewords against a file (human output)
+horchctl process recording.wav --json  # one JSON object per detection, jq-friendly
 ```
 
 All mutator commands either error out cleanly (validates shape /
 unique name / cooldown) or echo back what they did. `--save` writes
 through [`toml_edit`](https://crates.io/crates/toml_edit) so user
 comments and ordering survive.
+
+### Process recorded audio
+
+`horchctl process FILE.wav` runs every configured wakeword against an
+audio file off the live mic pipeline. The daemon spins up a separate
+isolated inference state for the call — your live mic stream isn't
+disturbed, and detections from the file aren't broadcast to D-Bus
+subscribers (they're returned to `horchctl` and printed).
+
+WAV must be 16 kHz mono int16. Convert with:
+```bash
+ffmpeg -i in.flac -ar 16000 -ac 1 -sample_fmt s16 out.wav
+```
+
+JSON output for CI / `jq` pipes:
+```bash
+$ horchctl process tests/alexa-utterance.wav --json | jq
+{
+  "timestamp_s": 0.32,
+  "name": "alexa",
+  "score": 0.974
+}
+```
+
+Use cases: regression-testing wakeword models against curated recordings,
+auditing past Detections, debugging false positives by replaying the
+suspect audio.
 
 ## horchd-gui (optional)
 

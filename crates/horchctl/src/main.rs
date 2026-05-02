@@ -52,6 +52,20 @@ enum Command {
     /// stage it under `~/.local/share/horchd/models/`, and register it
     /// with the daemon.
     Import(ImportArgs),
+
+    /// Run all configured wakewords against a WAV file off the live mic
+    /// pipeline. Prints one line per detection.
+    Process(ProcessArgs),
+}
+
+#[derive(Debug, Args)]
+struct ProcessArgs {
+    /// Path to a 16 kHz mono int16 WAV file. Use ffmpeg if the format
+    /// doesn't match: `ffmpeg -i in.flac -ar 16000 -ac 1 -sample_fmt s16 out.wav`
+    file: PathBuf,
+    /// Emit one JSON object per line instead of the human-readable table.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -207,7 +221,49 @@ async fn main() -> Result<()> {
             Ok(())
         }
         Command::Import(args) => run_import(&proxy, args).await,
+        Command::Process(args) => run_process(&proxy, args).await,
     }
+}
+
+#[derive(serde::Serialize)]
+struct ProcessEntry<'a> {
+    timestamp_s: f64,
+    name: &'a str,
+    score: f64,
+}
+
+async fn run_process(proxy: &DaemonProxy<'_>, args: ProcessArgs) -> Result<()> {
+    let abs = args
+        .file
+        .canonicalize()
+        .with_context(|| format!("resolving {}", args.file.display()))?;
+    let abs_str = abs.to_str().context("path is not valid UTF-8")?;
+    let entries = proxy
+        .process_audio(abs_str)
+        .await
+        .with_context(|| format!("ProcessAudio({abs_str:?})"))?;
+    if args.json {
+        for (name, score, ts_ms) in &entries {
+            let entry = ProcessEntry {
+                timestamp_s: *ts_ms as f64 / 1000.0,
+                name,
+                score: *score,
+            };
+            println!("{}", serde_json::to_string(&entry)?);
+        }
+    } else if entries.is_empty() {
+        eprintln!("no detections");
+    } else {
+        for (name, score, ts_ms) in &entries {
+            println!(
+                "{:>9.3}s  {:<20}  score={:.3}",
+                *ts_ms as f64 / 1000.0,
+                name,
+                score
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Defends against hostile redirects or upstream bugs filling

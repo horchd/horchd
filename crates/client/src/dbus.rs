@@ -12,6 +12,12 @@ use zbus::proxy;
 /// enabled, cooldown_ms)`. Matches D-Bus signature `(sdsbu)`.
 pub type WakewordSnapshot = (String, f64, String, bool, u32);
 
+/// One detection from [`DaemonProxy::process_audio`]:
+/// `(name, score, timestamp_ms_into_file)`. Matches D-Bus signature `(sdt)`.
+/// `timestamp_ms_into_file` is **not** `CLOCK_MONOTONIC` — it's the
+/// elapsed milliseconds from the start of the processed file.
+pub type DetectionEntry = (String, f64, u64);
+
 #[proxy(
     interface = "xyz.horchd.Daemon1",
     default_service = "xyz.horchd.Daemon",
@@ -43,6 +49,15 @@ pub trait Daemon {
     /// Models that are still configured stay hot; only added / removed /
     /// path-changed entries trigger I/O. The audio thread is preserved.
     fn reload(&self) -> zbus::Result<()>;
+
+    /// Run all configured wakewords against an audio file off the live
+    /// mic pipeline. Loads a fresh isolated inference state per call;
+    /// the live mic stream is not disturbed. Returns one entry per
+    /// detection: `(name, score, timestamp_ms_into_file)`.
+    ///
+    /// `path` must be an absolute filesystem path to a 16 kHz mono
+    /// int16 WAV file readable by the daemon process.
+    fn process_audio(&self, path: &str) -> zbus::Result<Vec<DetectionEntry>>;
 
     /// Sorted list of cpal input device names available on the default
     /// host. Cheap — only enumerates, doesn't open streams.

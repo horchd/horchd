@@ -11,8 +11,10 @@
 //! must never block. We use [`mpsc::Sender::try_send`]; on overflow the
 //! frame is dropped and counted, never blocked.
 
+pub mod file;
 pub mod mic;
 
+pub use file::FileSource;
 pub use mic::MicSource;
 
 use std::num::NonZeroUsize;
