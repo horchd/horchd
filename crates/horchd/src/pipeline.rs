@@ -111,6 +111,65 @@ impl Pipeline {
     }
 }
 
+/// One-shot inference pipeline that owns its own [`InferencePipeline`]
+/// and detector set — no `SharedState`, no broadcast fan-out.
+///
+/// Use this when running a finite audio source (file, replay) without
+/// disturbing the live mic pipeline. Sinks are called sequentially per
+/// frame; for [`ProcessAudio`] we hand it a single
+/// [`crate::sink::MpscSink`] which is unbounded and never blocks.
+///
+/// Cooldown caveat: [`Detector`] uses wall-clock `Instant` for its
+/// cooldown gate. When a file processes faster than realtime (typical
+/// — 1 s of audio takes ~80 ms of inference), two detections that are
+/// 1.5 s apart in the file may collapse to ~120 ms apart in wall time,
+/// inside the cooldown window, and the second one is dropped. Acceptable
+/// for v0.2.0; v0.3.0 should refactor `Detector::update` to take a
+/// generic time source.
+pub struct TransientPipeline {
+    inference: crate::inference::InferencePipeline,
+    detectors: Vec<crate::detector::Detector>,
+    sinks: Vec<Arc<dyn DetectionSink>>,
+}
+
+impl TransientPipeline {
+    pub fn new(
+        inference: crate::inference::InferencePipeline,
+        detectors: Vec<crate::detector::Detector>,
+        sinks: Vec<Arc<dyn DetectionSink>>,
+    ) -> Self {
+        Self {
+            inference,
+            detectors,
+            sinks,
+        }
+    }
+
+    /// Run until `frames` closes. Returns once the last frame is processed.
+    pub async fn run(mut self, mut frames: mpsc::Receiver<horchd_client::AudioFrame>) {
+        while let Some(frame) = frames.recv().await {
+            let result = tokio::task::block_in_place(|| self.inference.process(&frame));
+            let scores = match result {
+                Ok(s) => s,
+                Err(err) => {
+                    tracing::error!(?err, "transient inference failed");
+                    continue;
+                }
+            };
+            let now = std::time::Instant::now();
+            for (det, (name, score)) in self.detectors.iter_mut().zip(scores.iter()) {
+                debug_assert_eq!(name, &det.name, "detector/classifier order mismatch");
+                let Some(event) = det.update(f64::from(*score), now) else {
+                    continue;
+                };
+                for sink in &self.sinks {
+                    sink.emit_detection(&event).await;
+                }
+            }
+        }
+    }
+}
+
 /// Spawn the per-sink subscriber loop. Pulled out of `Pipeline::add_sink`
 /// so tests can drive it with their own broadcasts.
 pub(crate) fn spawn_sink_emitter(

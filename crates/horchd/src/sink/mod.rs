@@ -5,5 +5,7 @@
 //! land in later phases).
 
 pub mod dbus;
+pub mod mpsc;
 
 pub use dbus::DBusSink;
+pub use mpsc::MpscSink;
