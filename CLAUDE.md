@@ -85,6 +85,7 @@ CNAME  docs.horchd.xyz  docs.horchd.NewtTheWolf.codeberg.page.
 | D-Bus object path | `/xyz/horchd/Daemon` |
 | D-Bus interface | `xyz.horchd.Daemon1` |
 | `GetStatus` return tuple | `(bddd)` — running, audio_fps, score_fps, mic_level |
+| `ProcessAudio(s path)` return | `a(sdt)` — array of `(name, score, ms_into_file)`. Loads a fresh isolated inference state per call; doesn't disturb the live mic pipeline or its sinks. |
 | Initial commit message | `Batman` (no body, no trailers — by user request) |
 
 ## Reference material outside this repo
