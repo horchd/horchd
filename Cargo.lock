@@ -1800,6 +1800,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "horchd-wyoming"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "hound"
 version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
