@@ -12,7 +12,7 @@ first place, use one of these paths.
 
 ## Importing a model
 
-`horchctl import` takes either an HTTP(S) URL or a local filesystem
+`horchctl wakeword import` takes either an HTTP(S) URL or a local filesystem
 path. It stages the model under `~/.local/share/horchd/models/` and
 registers it with the daemon.
 
@@ -20,8 +20,8 @@ registers it with the daemon.
 
 ```bash
 # openWakeWord pretrained models live in the GitHub release:
-horchctl import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx --as alexa
-horchctl import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.onnx --as jarvis --threshold 0.65
+horchctl wakeword import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx --as alexa
+horchctl wakeword import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.onnx --as jarvis --threshold 0.65
 ```
 
 The default wakeword name is the filename stem with `.` replaced by `_`
@@ -31,8 +31,8 @@ a cleaner name.
 ### From a local file
 
 ```bash
-horchctl import ~/Downloads/my-model.onnx --as my_wake
-horchctl import ./trained/jarvis.onnx --threshold 0.65
+horchctl wakeword import ~/Downloads/my-model.onnx --as my_wake
+horchctl wakeword import ./trained/jarvis.onnx --threshold 0.65
 ```
 
 If the file already lives under `~/.local/share/horchd/models/`, no
@@ -58,7 +58,7 @@ All published at
 idempotently (Remove + Add):
 
 ```bash
-horchctl import https://example.com/wake.onnx --as wake --force
+horchctl wakeword import https://example.com/wake.onnx --as wake --force
 ```
 
 ## Train your own with openWakeWord
@@ -67,7 +67,7 @@ For a custom wakeword see openWakeWord's
 [training docs](https://github.com/dscripka/openWakeWord#training-new-models).
 The output is an `.onnx` file with input shape `(N, 16, 96)` and output
 `(N, 1)` — exactly what horchd's classifier loader expects. Drop it under
-`~/.local/share/horchd/models/` and run `horchctl add <name> --model …`.
+`~/.local/share/horchd/models/` and run `horchctl wakeword add <name> --model …`.
 
 After training, validate the model against a few held-out recordings via
 [`horchctl process`](/recipes/process-audio/) before relying on it live.
@@ -82,7 +82,7 @@ wakewords use one of the two paths above.
 
 ## Validation
 
-When you `horchctl add ...`, the daemon loads the `.onnx` and validates the
+When you `horchctl wakeword add ...`, the daemon loads the `.onnx` and validates the
 shape before accepting it. If you see something like:
 
 ```

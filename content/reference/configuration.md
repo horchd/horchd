@@ -9,8 +9,8 @@ description: "Complete reference for ~/.config/horchd/config.toml — every key,
 
 `~/.config/horchd/config.toml` is the source of truth. Hand-editable;
 `horchctl reload` re-reads it without dropping the audio thread.
-`horchctl threshold/enable/disable/cooldown/add/remove --save` mutate the
-file in place while preserving comments and formatting.
+`horchctl wakeword {threshold,enable,disable,cooldown,add,remove} --save`
+mutate the file in place while preserving comments and formatting.
 
 ## Full example
 

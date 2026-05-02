@@ -20,7 +20,7 @@ oww=$(python -c 'import openwakeword, pathlib; print(pathlib.Path(openwakeword._
 cp "$oww/hey_jarvis_v0.1.onnx" ~/.local/share/horchd/models/
 
 # Register it with the daemon
-horchctl add hey_jarvis --model ~/.local/share/horchd/models/hey_jarvis_v0.1.onnx
+horchctl wakeword add hey_jarvis --model ~/.local/share/horchd/models/hey_jarvis_v0.1.onnx
 horchctl status
 ```
 
@@ -33,7 +33,7 @@ models dir and register:
 
 ```bash
 cp ~/Downloads/<name>.onnx ~/.local/share/horchd/models/
-horchctl add <name> --model ~/.local/share/horchd/models/<name>.onnx --threshold 0.5
+horchctl wakeword add <name> --model ~/.local/share/horchd/models/<name>.onnx --threshold 0.5
 ```
 
 See [Training a wakeword](/guides/training/) for the full path matrix.
@@ -62,11 +62,13 @@ language that speaks D-Bus. See the
 ## Day-to-day
 
 ```bash
-horchctl list                                     # tabular view
-horchctl threshold hey_jarvis 0.6 --save          # tweak + persist
-horchctl disable hey_jarvis --save                # mute without unloading
-horchctl enable  hey_jarvis --save
-horchctl remove  hey_jarvis                       # keeps the .onnx on disk
-horchctl reload                                   # re-read config.toml
-journalctl --user -fu horchd                      # live logs
+horchctl wakeword list                                      # tabular view
+horchctl wakeword threshold hey_jarvis 0.6 --save           # tweak + persist
+horchctl wakeword disable hey_jarvis --save                 # mute without unloading
+horchctl wakeword enable  hey_jarvis --save
+horchctl wakeword remove  hey_jarvis                        # keeps the .onnx on disk
+horchctl reload                                             # re-read config.toml
+horchctl device list                                        # list mic devices
+horchctl device set "PipeWire Sound Server"                 # hot-swap input
+journalctl --user -fu horchd                                # live logs
 ```

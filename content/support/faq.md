@@ -53,7 +53,7 @@ Three usual culprits:
 1. **Mic not actually capturing.** `horchctl status` should show
    `audio: ~12.50 fps`. If it's 0, check `pavucontrol`/`pw-top` to make
    sure the daemon's input stream sees real audio.
-2. **Threshold too high.** Try `horchctl threshold <name> 0.3`
+2. **Threshold too high.** Try `horchctl wakeword threshold <name> 0.3`
    (transient) and re-test.
 3. **Wrong model.** A model trained for a different wakeword phrase
    won't fire no matter what. Verify with one of the upstream pretrained
