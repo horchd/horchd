@@ -78,11 +78,10 @@ its own detector state. Two consequences:
    dominate end-to-end time; for multi-second files it's lost in the
    inference cost.
 
-## Cooldown caveat
+## Cooldown is virtual-time correct
 
-The detector's cooldown (`cooldown_ms`) is wall-clock-based. When a
-file processes faster than realtime — typical, since 1 s of audio takes
-~80 ms of CPU — two utterances that are 1.5 s apart in the recording
-may collapse to ~120 ms apart in wall time, fall inside the cooldown
-window, and the second one is dropped. Acceptable for v0.2.0; v0.3.0
-plans a virtual-time refactor of the detector for this exact case.
+Each input frame advances the detector's clock by exactly 80 ms of
+nominal audio time, regardless of how fast the file processes. Two
+utterances 1.5 s apart in the recording register 1.5 s apart in
+detector time even if the whole file finishes in 100 ms of CPU — so
+both detections fire (assuming both clear the threshold).
