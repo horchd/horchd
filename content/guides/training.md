@@ -18,9 +18,9 @@ models. The fastest way to get a working wakeword is to import one of them
 via `horchctl`:
 
 ```bash
-horchctl import-pretrained --list
-horchctl import-pretrained hey_jarvis_v0.1
-horchctl import-pretrained hey_jarvis_v0.1 --as jarvis --threshold 0.65
+horchctl import --list
+horchctl import hey_jarvis_v0.1
+horchctl import hey_jarvis_v0.1 --as jarvis --threshold 0.65
 ```
 
 This downloads the `.onnx` into `~/.local/share/horchd/models/` and
