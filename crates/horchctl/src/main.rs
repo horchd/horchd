@@ -51,7 +51,7 @@ enum Command {
     /// Download an upstream openWakeWord pretrained model into
     /// `~/.local/share/horchd/models/` and register it with the daemon.
     /// Use `--list` to see what's available.
-    ImportPretrained(PretrainedArgs),
+    Import(ImportArgs),
 }
 
 #[derive(Debug, Args)]
@@ -67,7 +67,7 @@ struct AddArgs {
 }
 
 #[derive(Debug, Args)]
-struct PretrainedArgs {
+struct ImportArgs {
     /// Pretrained model name (e.g. `hey_jarvis_v0.1`). Omit when using `--list`.
     name: Option<String>,
     /// Print the catalogue of known pretrained models and exit.
@@ -119,8 +119,8 @@ struct NameOnly {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // import-pretrained --list and the like don't need the daemon.
-    if let Command::ImportPretrained(args) = &cli.command
+    // import --list and the like don't need the daemon.
+    if let Command::Import(args) = &cli.command
         && args.list
     {
         print_catalogue();
@@ -215,7 +215,7 @@ async fn main() -> Result<()> {
             println!("reloaded");
             Ok(())
         }
-        Command::ImportPretrained(args) => import_pretrained(&proxy, args).await,
+        Command::Import(args) => run_import(&proxy, args).await,
     }
 }
 
@@ -245,13 +245,13 @@ fn print_catalogue() {
     for (entry, descr) in PRETRAINED_CATALOGUE {
         println!("  {entry:<name_w$}  {descr}");
     }
-    println!("\nUsage:  horchctl import-pretrained <name> [--as alias] [--threshold 0.5]");
+    println!("\nUsage:  horchctl import <name> [--as alias] [--threshold 0.5]");
 }
 
-async fn import_pretrained(proxy: &DaemonProxy<'_>, args: PretrainedArgs) -> Result<()> {
-    let name = args.name.ok_or_else(|| {
-        anyhow::anyhow!("missing model name; try `horchctl import-pretrained --list`")
-    })?;
+async fn run_import(proxy: &DaemonProxy<'_>, args: ImportArgs) -> Result<()> {
+    let name = args
+        .name
+        .ok_or_else(|| anyhow::anyhow!("missing model name; try `horchctl import --list`"))?;
     if !PRETRAINED_CATALOGUE.iter().any(|(n, _)| *n == name) {
         bail!("{name:?} is not in the pretrained catalogue; run `--list` to see options");
     }
@@ -278,6 +278,11 @@ async fn import_pretrained(proxy: &DaemonProxy<'_>, args: PretrainedArgs) -> Res
     }
 
     let model_str = dest.to_string_lossy().into_owned();
+    if args.force {
+        // Best-effort cleanup so --force is idempotent. Ignore "not
+        // found" — that's the happy path on a fresh install.
+        let _ = proxy.remove(&register_as).await;
+    }
     proxy
         .add(&register_as, &model_str, args.threshold, args.cooldown)
         .await
