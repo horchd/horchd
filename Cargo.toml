@@ -3,8 +3,8 @@ resolver = "2"
 members = [
     "crates/horchctl",
     "crates/horchd",
-    "crates/horchd-client",
-    "crates/horchd-gui/src-tauri",
+    "crates/client",
+    "crates/gui/src-tauri",
 ]
 
 [workspace.package]

@@ -17,7 +17,7 @@ This crate follows the canonical [Tauri 2 + SvelteKit][tauri-svelte]
 project layout:
 
 ```
-crates/horchd-gui/
+crates/gui/
 ├── package.json            ← frontend deps + scripts (bun)
 ├── svelte.config.js
 ├── vite.config.ts
@@ -56,7 +56,7 @@ sudo apt install libwebkit2gtk-4.1-dev librsvg2-dev \
 ```bash
 cargo install tauri-cli --version "^2" --locked
 # OR via the bun-managed copy that ships in package.json:
-cd crates/horchd-gui && bun install
+cd crates/gui && bun install
 ```
 
 Either route gives you the `tauri` command — system-wide via cargo, or
@@ -65,7 +65,7 @@ project-local via `bun run tauri …`.
 ### 3. Run
 
 ```bash
-cd crates/horchd-gui
+cd crates/gui
 
 # Production-style: build static frontend + native bundle
 cargo tauri build
@@ -90,7 +90,7 @@ daemon data, which is great for tweaking the design without a daemon
 or rebuilding the Tauri shell:
 
 ```bash
-cd crates/horchd-gui
+cd crates/gui
 bun run dev
 xdg-open http://localhost:5173
 ```

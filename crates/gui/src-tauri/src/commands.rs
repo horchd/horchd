@@ -636,7 +636,7 @@ fn canonical_negatives_path() -> anyhow::Result<std::path::PathBuf> {
 /// 2. siblings of the running executable (released builds).
 fn find_train_package_dir() -> Option<std::path::PathBuf> {
     if let Some(manifest) = option_env!("CARGO_MANIFEST_DIR") {
-        // crates/horchd-gui/src-tauri → ../../../python
+        // crates/gui/src-tauri → ../../../python
         let p = std::path::Path::new(manifest)
             .join("..")
             .join("..")

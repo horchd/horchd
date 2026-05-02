@@ -14,11 +14,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 echo "→ cargo test --workspace"
 cargo test --workspace
 
-if [[ -d crates/horchd-gui/node_modules ]]; then
+if [[ -d crates/gui/node_modules ]]; then
   echo "→ frontend type-check (svelte-check)"
-  (cd crates/horchd-gui && bun run check)
+  (cd crates/gui && bun run check)
 else
-  echo "→ frontend node_modules missing; skipping type-check (run \`cd crates/horchd-gui && bun install\`)"
+  echo "→ frontend node_modules missing; skipping type-check (run \`cd crates/gui && bun install\`)"
 fi
 
 echo

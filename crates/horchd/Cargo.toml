@@ -31,7 +31,7 @@ dynamic-onnxruntime = ["ort/load-dynamic"]
 anyhow.workspace = true
 clap.workspace = true
 cpal = "0.17.3"
-horchd-client = { version = "0.1.0", path = "../horchd-client" }
+horchd-client = { version = "0.1.0", path = "../client" }
 libc = "0.2.186"
 ndarray = "0.17.2"
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "tracing", "api-24"] }

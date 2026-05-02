@@ -136,10 +136,10 @@ auto-installs `cargo-llvm-cov` on first run.
 ```
 horchd/
 ├── crates/
-│   ├── horchd-client/   shared types + D-Bus proxy trait (consumed by every binary)
-│   ├── horchd/        the daemon (lib + bin)
-│   ├── horchctl/      CLI client (status, list, monitor, threshold, add, remove, reload, …)
-│   └── horchd-gui/    Tauri 2 tray + control panel (SvelteKit + Tailwind v4)
+│   ├── client/          shared types + D-Bus proxy trait (consumed by every binary)
+│   ├── horchd/          the daemon (lib + bin)
+│   ├── horchctl/        CLI client (status, list, monitor, threshold, add, remove, reload, …)
+│   └── gui/             Tauri 2 tray + control panel (SvelteKit + Tailwind v4)
 ├── python/            optional training helper (subprocessed by the GUI's Train tab)
 ├── shared-models/     melspectrogram.onnx + embedding_model.onnx (gitignored)
 ├── systemd/           user unit
@@ -283,7 +283,7 @@ gdbus monitor --session --dest xyz.horchd.Daemon --object-path /xyz/horchd/Daemo
 
 ### Rust
 
-The [`horchd-client`](crates/horchd-client/) crate ships the zbus proxy
+The [`horchd-client`](crates/client/) crate ships the zbus proxy
 trait + the on-the-wire types (`Config`, `Wakeword`, `WakewordEvent`,
 `WakewordSnapshot`, …). Every binary in this repo uses it; external
 projects use the same crate.
@@ -363,7 +363,7 @@ Plex Mono** for everything else, hairline borders instead of rounded
 corners.
 
 ```bash
-cd crates/horchd-gui
+cd crates/gui
 
 # Dev: vite dev server + Tauri shell with HMR (auto-spawns both)
 cargo tauri dev
@@ -373,9 +373,9 @@ cargo tauri build
 ```
 
 The crate follows the canonical Tauri 2 + SvelteKit layout — frontend
-at `crates/horchd-gui/`, Rust + `tauri.conf.json` at
-`crates/horchd-gui/src-tauri/`. Bootstrap (Linux dev headers + Tauri
-CLI) is in [crates/horchd-gui/README.md](crates/horchd-gui/README.md).
+at `crates/gui/`, Rust + `tauri.conf.json` at
+`crates/gui/src-tauri/`. Bootstrap (Linux dev headers + Tauri
+CLI) is in [crates/gui/README.md](crates/gui/README.md).
 
 The Wayland workaround for `Gdk Error 71` (NVIDIA + webkit2gtk +
 Wayland) is set automatically inside the binary; nothing to configure.
@@ -429,7 +429,7 @@ regressions in either show up immediately.
 GUI dev:
 
 ```bash
-cd crates/horchd-gui
+cd crates/gui
 bun install
 bun run dev          # vite dev server with HMR on :5173
 # In another terminal: cargo tauri dev   (loads http://localhost:5173)
@@ -440,13 +440,13 @@ deterministic mock backend, so you can iterate on the design without a
 running daemon (or even Tauri):
 
 ```bash
-cd crates/horchd-gui
+cd crates/gui
 bun run dev
 xdg-open http://localhost:5173
 ```
 
 The mock kicks in automatically when `window.__TAURI_INTERNALS__` is
-absent — see `crates/horchd-gui/src/lib/dbus.ts`.
+absent — see `crates/gui/src/lib/dbus.ts`.
 
 ## Roadmap
 
