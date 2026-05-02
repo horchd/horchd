@@ -69,6 +69,9 @@ The output is an `.onnx` file with input shape `(N, 16, 96)` and output
 `(N, 1)` — exactly what horchd's classifier loader expects. Drop it under
 `~/.local/share/horchd/models/` and run `horchctl add <name> --model …`.
 
+After training, validate the model against a few held-out recordings via
+[`horchctl process`](/recipes/process-audio/) before relying on it live.
+
 ## In-app training (planned)
 
 The `horchd-gui` Tauri app will eventually ship a Train tab where you
