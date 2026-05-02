@@ -10,32 +10,56 @@ description: "How to obtain or train a custom wakeword classifier compatible wit
 `horchd` loads `.onnx` classifiers and runs them. To get a model in the
 first place, use one of these paths.
 
-## Pretrained openWakeWord models
+## Importing a model
 
-[`openwakeword`](https://github.com/dscripka/openWakeWord) (the Python
-package horchd ports the inference path from) ships a set of pretrained
-models. The fastest way to get a working wakeword is to import one of them
-via `horchctl`:
+`horchctl import` takes either an HTTP(S) URL or a local filesystem
+path. It stages the model under `~/.local/share/horchd/models/` and
+registers it with the daemon.
 
-```bash
-horchctl import --list
-horchctl import hey_jarvis_v0.1
-horchctl import hey_jarvis_v0.1 --as jarvis --threshold 0.65
-```
-
-This downloads the `.onnx` into `~/.local/share/horchd/models/` and
-registers it. You can also do it by hand from a local Python install:
+### From a URL
 
 ```bash
-oww=$(python -c 'import openwakeword, pathlib; print(pathlib.Path(openwakeword.__file__).parent / "resources/models")')
-ls "$oww"/*.onnx
-cp "$oww/hey_jarvis_v0.1.onnx" ~/.local/share/horchd/models/
-horchctl add hey_jarvis --model ~/.local/share/horchd/models/hey_jarvis_v0.1.onnx
+# openWakeWord pretrained models live in the GitHub release:
+horchctl import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx --as alexa
+horchctl import https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.onnx --as jarvis --threshold 0.65
 ```
 
-You'll find `alexa_v0.1.onnx`, `hey_jarvis_v0.1.onnx`,
-`hey_mycroft_v0.1.onnx`, `hey_rhasspy_v0.1.onnx`, `weather_v0.1.onnx`,
-`timer_v0.1.onnx` in the upstream catalogue.
+The default wakeword name is the filename stem with `.` replaced by `_`
+(so `alexa_v0.1.onnx` becomes `alexa_v0_1`). Use `--as <name>` to pick
+a cleaner name.
+
+### From a local file
+
+```bash
+horchctl import ~/Downloads/my-model.onnx --as my_wake
+horchctl import ./trained/jarvis.onnx --threshold 0.65
+```
+
+If the file already lives under `~/.local/share/horchd/models/`, no
+copy happens. Otherwise it's copied in.
+
+### Common openWakeWord pretrained models
+
+| File | Suggested `--as` |
+| --- | --- |
+| `alexa_v0.1.onnx` | `alexa` |
+| `hey_jarvis_v0.1.onnx` | `jarvis` |
+| `hey_mycroft_v0.1.onnx` | `mycroft` |
+| `hey_rhasspy_v0.1.onnx` | `rhasspy` |
+| `weather_v0.1.onnx` | `weather` |
+| `timer_v0.1.onnx` | `timer` |
+
+All published at
+`https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/<file>`.
+
+### Re-importing
+
+`--force` re-downloads / re-copies the model and re-registers it
+idempotently (Remove + Add):
+
+```bash
+horchctl import https://example.com/wake.onnx --as wake --force
+```
 
 ## Train your own with openWakeWord
 
