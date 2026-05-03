@@ -301,7 +301,7 @@ horchctl wyoming disable           # transient; comes back on next start
 # ~/.config/horchd/config.toml
 [wyoming]
 enabled = true
-mode = "local-mic"                       # only mode wired today
+mode = "wyoming-server"                  # see "Modes" below
 listen = ["tcp://0.0.0.0:10400"]
 zeroconf = true                          # advertise _wyoming._tcp.local.
 # service_name = "horchd-living"         # default = "horchd-<hostname>"
@@ -319,11 +319,20 @@ mDNS auto-discovery should surface it as `horchd-<hostname>` on
 `_wyoming._tcp.local.`. If discovery is blocked on your network, point
 HA at `<host>:10400` manually.
 
-In `local-mic` mode the daemon owns the microphone; client `audio-chunk`
-events are accepted but ignored, and detections from the live mic
-pipeline fan out to every connected client. Modes for "client streams
-the audio" (`wyoming-server`, `hybrid`) are reserved in the schema for a
-later release.
+### Modes
+
+| `mode` | Audio source | Use case |
+| --- | --- | --- |
+| `local-mic` (default) | the daemon's local mic | "horchd at my desk, broadcast wakewords to HA as events"; client `audio-chunk`s are ignored |
+| `wyoming-server` | each client streams its own audio via `audio-chunk`s | drop-in replacement for `wyoming-openwakeword`; standard HA voice-pipeline topology |
+| `hybrid` | both — local mic + client-streamed audio | runs both flows side by side |
+
+In `wyoming-server` and `hybrid` mode horchd loads a fresh isolated
+inference state per connection on the first `audio-start` (~200 ms,
+~10 MB extra RAM per client) so multiple clients don't interfere with
+each other. v1 only accepts the openWakeWord canonical 16 kHz / mono /
+int16 input format — that's what every shipping HA Wyoming satellite
+emits. Off-spec audio is rejected with an actionable message.
 
 ## Subscribers
 

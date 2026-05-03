@@ -13,9 +13,11 @@
 
 pub mod file;
 pub mod mic;
+pub mod wyoming;
 
 pub use file::FileSource;
 pub use mic::MicSource;
+pub use wyoming::WyomingSource;
 
 use std::num::NonZeroUsize;
 use std::sync::Arc;

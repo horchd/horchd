@@ -34,15 +34,6 @@ pub struct ServerCtx {
 /// `JoinHandle` set so the caller can keep them alive (or abort on
 /// shutdown if it cares to).
 pub async fn serve(addrs: Vec<ListenAddr>, ctx: Arc<ServerCtx>) -> Result<Vec<JoinHandle<()>>> {
-    if !matches!(ctx.mode, WyomingMode::LocalMic) {
-        // wyoming-server / hybrid land in D3. Until then, refuse to
-        // boot in those modes rather than silently behave like local-mic.
-        anyhow::bail!(
-            "Wyoming mode {:?} is not implemented yet (only \"local-mic\" works in D2)",
-            ctx.mode
-        );
-    }
-
     let mut joins = Vec::with_capacity(addrs.len());
     for addr in addrs {
         let ctx = Arc::clone(&ctx);

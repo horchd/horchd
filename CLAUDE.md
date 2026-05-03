@@ -91,6 +91,7 @@ CNAME  docs.horchd.xyz  docs.horchd.NewtTheWolf.codeberg.page.
 | Wyoming server module | `crates/horchd/src/wyoming/` (mod, not separate crate). Wire codec lives in `crates/wyoming/` (`horchd-wyoming` on crates.io). |
 | Wyoming TCP port | `10400` (matches upstream Wyoming convention) |
 | Wyoming mDNS service type | `_wyoming._tcp.local.` |
+| Wyoming modes | `local-mic` (server-owned), `wyoming-server` (client-streamed = HA standard), `hybrid` (both). v1 client audio = 16 kHz / mono / int16 only — rubato resampling deferred until a real-world need surfaces. |
 | Initial commit message | `Batman` (no body, no trailers — by user request) |
 
 ## Reference material outside this repo
