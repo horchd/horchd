@@ -18,6 +18,8 @@ pub struct Config {
     pub engine: Engine,
     #[serde(default, rename = "wakeword")]
     pub wakewords: Vec<Wakeword>,
+    #[serde(default)]
+    pub wyoming: WyomingConfig,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -79,6 +81,61 @@ impl Wakeword {
     }
     fn default_enabled() -> bool {
         Self::DEFAULT_ENABLED
+    }
+}
+
+/// Wyoming-protocol server settings. Defaults to disabled so a fresh
+/// install matches the pre-Phase-D behaviour.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WyomingConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "WyomingConfig::default_mode")]
+    pub mode: WyomingMode,
+    #[serde(default = "WyomingConfig::default_listen")]
+    pub listen: Vec<String>,
+    #[serde(default = "WyomingConfig::default_zeroconf")]
+    pub zeroconf: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WyomingMode {
+    /// Server owns the mic; client `audio-chunk`s are ignored, detections
+    /// from the live mic pipeline fan out to every connected client.
+    LocalMic,
+    /// (Reserved for D3.) Each client feeds its own audio.
+    WyomingServer,
+    /// (Reserved for D3.) Both behaviours at once.
+    Hybrid,
+}
+
+impl Default for WyomingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mode: Self::default_mode(),
+            listen: Self::default_listen(),
+            zeroconf: Self::default_zeroconf(),
+            service_name: None,
+        }
+    }
+}
+
+impl WyomingConfig {
+    pub const DEFAULT_TCP_PORT: u16 = 10_400;
+
+    fn default_mode() -> WyomingMode {
+        WyomingMode::LocalMic
+    }
+    fn default_listen() -> Vec<String> {
+        vec![format!("tcp://0.0.0.0:{}", Self::DEFAULT_TCP_PORT)]
+    }
+    fn default_zeroconf() -> bool {
+        true
     }
 }
 
@@ -196,6 +253,31 @@ enabled = true
 name = "jarvis"
 model = "/home/user/.local/share/horchd/models/jarvis.onnx"
 "#;
+
+    #[test]
+    fn wyoming_defaults_when_section_missing() {
+        let cfg: Config = SAMPLE.parse().expect("parse");
+        assert!(!cfg.wyoming.enabled);
+        assert_eq!(cfg.wyoming.mode, WyomingMode::LocalMic);
+        assert_eq!(cfg.wyoming.listen, vec!["tcp://0.0.0.0:10400".to_string()]);
+        assert!(cfg.wyoming.zeroconf);
+        assert!(cfg.wyoming.service_name.is_none());
+    }
+
+    #[test]
+    fn parses_wyoming_section() {
+        let with_wyoming = format!(
+            "{SAMPLE}\n[wyoming]\nenabled = true\nmode = \"local-mic\"\n\
+             listen = [\"tcp://0.0.0.0:10400\", \"unix:///run/horchd/wyoming.sock\"]\n\
+             zeroconf = false\nservice_name = \"horchd-living\"\n"
+        );
+        let cfg: Config = with_wyoming.parse().expect("parse");
+        assert!(cfg.wyoming.enabled);
+        assert_eq!(cfg.wyoming.mode, WyomingMode::LocalMic);
+        assert_eq!(cfg.wyoming.listen.len(), 2);
+        assert!(!cfg.wyoming.zeroconf);
+        assert_eq!(cfg.wyoming.service_name.as_deref(), Some("horchd-living"));
+    }
 
     #[test]
     fn parses_full_config_with_defaults() {

@@ -39,6 +39,28 @@ enum Command {
     /// Manage the daemon's audio capture device.
     #[command(subcommand)]
     Device(DeviceCommand),
+
+    /// Inspect the embedded Wyoming-protocol server.
+    #[command(subcommand)]
+    Wyoming(WyomingCommand),
+}
+
+#[derive(Debug, Subcommand)]
+enum WyomingCommand {
+    /// Show the configured listeners and whether the Wyoming server is enabled.
+    Status,
+    /// Start the Wyoming listener at runtime. `--save` also writes
+    /// `[wyoming].enabled = true` to `config.toml`.
+    Enable {
+        #[arg(long)]
+        save: bool,
+    },
+    /// Stop the Wyoming listener at runtime. `--save` also writes
+    /// `[wyoming].enabled = false` to `config.toml`.
+    Disable {
+        #[arg(long)]
+        save: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -178,6 +200,50 @@ async fn main() -> Result<()> {
         Command::Process(args) => run_process(&proxy, args).await,
         Command::Wakeword(cmd) => run_wakeword(&proxy, cmd).await,
         Command::Device(cmd) => run_device(&proxy, cmd).await,
+        Command::Wyoming(cmd) => run_wyoming(&proxy, cmd).await,
+    }
+}
+
+async fn run_wyoming(proxy: &DaemonProxy<'_>, cmd: WyomingCommand) -> Result<()> {
+    match cmd {
+        WyomingCommand::Status => {
+            let (enabled, mode, listen) = proxy.wyoming_status().await.context("WyomingStatus")?;
+            println!("enabled: {enabled}");
+            println!("mode:    {mode}");
+            if listen.is_empty() {
+                println!("listen:  (none)");
+            } else {
+                println!("listen:");
+                for uri in listen {
+                    println!("  {uri}");
+                }
+            }
+            Ok(())
+        }
+        WyomingCommand::Enable { save } => {
+            let bound = proxy
+                .set_wyoming_enabled(true, save)
+                .await
+                .context("SetWyomingEnabled(true)")?;
+            println!(
+                "Wyoming server {}{}",
+                if bound { "running" } else { "not running" },
+                if save { " (persisted)" } else { "" }
+            );
+            Ok(())
+        }
+        WyomingCommand::Disable { save } => {
+            let bound = proxy
+                .set_wyoming_enabled(false, save)
+                .await
+                .context("SetWyomingEnabled(false)")?;
+            println!(
+                "Wyoming server {}{}",
+                if bound { "still running" } else { "stopped" },
+                if save { " (persisted)" } else { "" }
+            );
+            Ok(())
+        }
     }
 }
 

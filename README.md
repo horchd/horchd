@@ -35,6 +35,7 @@ you want a native daemon instead of a Python process, and loads any
 - **Multi-wakeword** — N classifiers run on the same audio frame, fan-out at the embedding stage
 - **Cheap** — ~12.5 inferences/sec on one core, ~1.5 MB shared models + ~80 KB per wakeword
 - **D-Bus first** — no HTTP listener, no custom socket, no cloud
+- **Wyoming-protocol server** — drop-in for `wyoming-openwakeword`, auto-discovered by Home Assistant via mDNS
 - **systemd user unit** — no root, no system-bus policy file
 - **Hot-reload** — edit the TOML, `horchctl reload`, never drops the audio thread
 - **Trainer-agnostic** — bring any
@@ -255,6 +256,8 @@ migrate.
 | `ListInputDevices`   | —                                                        | `as`         |
 | `SetInputDevice`     | `s name`, `b persist`                                    | `()`         |
 | `Reload`             | —                                                        | `()`         |
+| `WyomingStatus`      | —                                                        | `(bsas)`     |
+| `SetWyomingEnabled`  | `b enabled`, `b persist`                                 | `b`          |
 
 `GetStatus` returns `(running, audio_fps, score_fps, mic_level)` — the
 trailing `mic_level` is the smoothed peak `|sample|` of the most recent
@@ -265,12 +268,71 @@ models directory (`$XDG_DATA_HOME/horchd/models/` or
 `~/.local/share/horchd/models/`) and rejects anything else, so a
 session-bus client cannot point the daemon at arbitrary files.
 
+`WyomingStatus` returns `(enabled, mode, listen_uris)` for the embedded
+[Wyoming](https://github.com/OHF-Voice/wyoming) protocol server — see
+the next section.
+
 | Signal          | Args                                  | Notes |
 | --------------- | ------------------------------------- | ----- |
 | `Detected`      | `s name`, `d score`, `t timestamp_us` | Rising-edge fire after threshold + cooldown. |
 | `ScoreSnapshot` | `s name`, `d score`                   | ~5 Hz per-wakeword score; for live UI meters. |
 
 Full reference + introspection output: <https://horchd.github.io/dbus-api>.
+
+## Wyoming server (Home Assistant)
+
+horchd embeds a [Wyoming-protocol](https://github.com/OHF-Voice/wyoming)
+listener so Home Assistant's voice pipeline (and any other Wyoming
+client) talks to it directly — no bridge daemon, no
+`wyoming-openwakeword` Python service in the middle.
+
+Off by default. Two ways to enable:
+
+```bash
+# Hot toggle, no daemon restart. --save also writes back to config.toml.
+horchctl wyoming enable --save
+horchctl wyoming status
+horchctl wyoming disable           # transient; comes back on next start
+```
+
+…or by editing the config file directly:
+
+```toml
+# ~/.config/horchd/config.toml
+[wyoming]
+enabled = true
+mode = "wyoming-server"                  # see "Modes" below
+listen = ["tcp://0.0.0.0:10400"]
+zeroconf = true                          # advertise _wyoming._tcp.local.
+# service_name = "horchd-living"         # default = "horchd-<hostname>"
+```
+
+Verify the listener answers:
+
+```bash
+echo '{"type":"describe"}' | nc -q1 127.0.0.1 10400
+```
+
+The second line returns an `info` event listing every wakeword you've
+registered. Add the daemon as a Wyoming integration in Home Assistant —
+mDNS auto-discovery should surface it as `horchd-<hostname>` on
+`_wyoming._tcp.local.`. If discovery is blocked on your network, point
+HA at `<host>:10400` manually.
+
+### Modes
+
+| `mode` | Audio source | Use case |
+| --- | --- | --- |
+| `local-mic` (default) | the daemon's local mic | "horchd at my desk, broadcast wakewords to HA as events"; client `audio-chunk`s are ignored |
+| `wyoming-server` | each client streams its own audio via `audio-chunk`s | drop-in replacement for `wyoming-openwakeword`; standard HA voice-pipeline topology |
+| `hybrid` | both — local mic + client-streamed audio | runs both flows side by side |
+
+In `wyoming-server` and `hybrid` mode horchd loads a fresh isolated
+inference state per connection on the first `audio-start` (~200 ms,
+~10 MB extra RAM per client) so multiple clients don't interfere with
+each other. v1 only accepts the openWakeWord canonical 16 kHz / mono /
+int16 input format — that's what every shipping HA Wyoming satellite
+emits. Off-spec audio is rejected with an actionable message.
 
 ## Subscribers
 
@@ -345,6 +407,10 @@ horchctl process recording.wav --json  # one JSON object per detection, jq-frien
 horchctl device list                            # what input devices does cpal see?
 horchctl device set "PipeWire Sound Server"     # transient hot-swap
 horchctl device set default --save              # persist to config.toml
+
+horchctl wyoming status                         # is the Wyoming server up? which URIs?
+horchctl wyoming enable --save                  # bind listeners now + persist
+horchctl wyoming disable                        # stop listeners (transient)
 ```
 
 All mutator commands either error out cleanly (validates shape /

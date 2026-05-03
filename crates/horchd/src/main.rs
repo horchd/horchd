@@ -7,9 +7,10 @@ use clap::Parser;
 use horchd::audio::{AudioStats, MicSource};
 use horchd::pipeline::Pipeline;
 use horchd::sink::DBusSink;
-use horchd::{AudioCmd, audio, detector, inference, persist, service, state};
+use horchd::wyoming::WyomingHandles;
+use horchd::{AudioCmd, audio, detector, inference, persist, service, state, wyoming};
 use horchd_client::{AudioSource, Config, DetectionSink};
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 use tokio::task::JoinHandle;
 use tracing_subscriber::EnvFilter;
 
@@ -90,12 +91,20 @@ async fn main() -> Result<()> {
     let audio_stats = Arc::new(AudioStats::new());
     let inference_stats = Arc::new(inference::InferenceStats::new());
 
+    let pipeline = Arc::new(Pipeline::new(
+        Arc::clone(&shared_state),
+        Arc::clone(&inference_stats),
+    ));
+
     let (audio_cmd_tx, mut audio_cmd_rx) = mpsc::channel::<AudioCmd>(8);
+    let wyoming_handles: Arc<Mutex<Option<WyomingHandles>>> = Arc::new(Mutex::new(None));
     let daemon = service::Daemon::new(
         Arc::clone(&shared_state),
         Arc::clone(&audio_stats),
         Arc::clone(&inference_stats),
         audio_cmd_tx.clone(),
+        Arc::clone(&wyoming_handles),
+        Arc::clone(&pipeline),
     );
     let conn = zbus::connection::Builder::session()?
         .name(DBUS_NAME)?
@@ -109,10 +118,6 @@ async fn main() -> Result<()> {
         "registered on session bus"
     );
 
-    let pipeline = Arc::new(Pipeline::new(
-        Arc::clone(&shared_state),
-        Arc::clone(&inference_stats),
-    ));
     // Subscribe BEFORE the first source starts: events fired before a
     // sink subscribes are dropped.
     let dbus_sink: Arc<dyn DetectionSink> = Arc::new(DBusSink::new(conn.clone()));
@@ -126,6 +131,16 @@ async fn main() -> Result<()> {
     );
     let frames = mic.start().context("starting audio capture")?;
     let mut inference_handle = spawn_inference(Arc::clone(&pipeline), frames);
+
+    if let Some(handles) = wyoming::start(&shared_state, &pipeline)
+        .await
+        .context("starting Wyoming server")?
+    {
+        *wyoming_handles.lock().await = Some(handles);
+        tracing::info!("Wyoming server started at boot");
+    } else {
+        tracing::info!("Wyoming server disabled (toggle via `horchctl wyoming enable`)");
+    }
 
     tokio::spawn(log_stats(
         Arc::clone(&audio_stats),

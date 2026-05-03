@@ -86,6 +86,12 @@ CNAME  docs.horchd.xyz  docs.horchd.NewtTheWolf.codeberg.page.
 | D-Bus interface | `xyz.horchd.Daemon1` |
 | `GetStatus` return tuple | `(bddd)` — running, audio_fps, score_fps, mic_level |
 | `ProcessAudio(s path)` return | `a(sdt)` — array of `(name, score, ms_into_file)`. Loads a fresh isolated inference state per call; doesn't disturb the live mic pipeline or its sinks. |
+| `WyomingStatus` return tuple | `(bsas)` — `(enabled, mode, listen_uris)`. `enabled` reflects current bound state, not just the config flag. |
+| `SetWyomingEnabled(b enabled, b persist) -> b` | Hot-toggle the listener + mDNS at runtime. `persist` writes `[wyoming].enabled` back to `config.toml`. Returns the bound state after the call. |
+| Wyoming server module | `crates/horchd/src/wyoming/` (mod, not separate crate). Wire codec lives in `crates/wyoming/` (`horchd-wyoming` on crates.io). |
+| Wyoming TCP port | `10400` (matches upstream Wyoming convention) |
+| Wyoming mDNS service type | `_wyoming._tcp.local.` |
+| Wyoming modes | `local-mic` (server-owned), `wyoming-server` (client-streamed = HA standard), `hybrid` (both). v1 client audio = 16 kHz / mono / int16 only — rubato resampling deferred until a real-world need surfaces. |
 | Initial commit message | `Batman` (no body, no trailers — by user request) |
 
 ## Reference material outside this repo

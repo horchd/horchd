@@ -38,6 +38,26 @@ pub fn set_engine_device(path: &Path, device: &str) -> Result<()> {
     write_doc(path, &doc)
 }
 
+/// Toggle `[wyoming].enabled`, creating the section if it doesn't
+/// exist yet (the default config has no `[wyoming]` block at all).
+pub fn set_wyoming_enabled(path: &Path, enabled: bool) -> Result<()> {
+    let mut doc = read_doc(path)?;
+    let needs_init = match doc.get("wyoming") {
+        Some(Item::Table(_)) => false,
+        Some(_) => bail!(
+            "config at {} has a [wyoming] entry that is not a table",
+            path.display()
+        ),
+        None => true,
+    };
+    if needs_init {
+        doc["wyoming"] = Item::Table(Table::new());
+    }
+    let table = doc["wyoming"].as_table_mut().expect("present after init");
+    table["enabled"] = edit_value(enabled);
+    write_doc(path, &doc)
+}
+
 pub fn add_wakeword(path: &Path, wake: &Wakeword) -> Result<()> {
     let mut doc = read_doc(path)?;
     let arr = wakeword_array_mut(&mut doc, path)?;

@@ -14,6 +14,7 @@ pub mod pipeline;
 pub mod service;
 pub mod sink;
 pub mod state;
+pub mod wyoming;
 
 /// Commands the D-Bus service handler can send back to `main` so audio
 /// device hot-swaps run on the thread that owns the (`!Send`) cpal

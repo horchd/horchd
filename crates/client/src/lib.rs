@@ -16,7 +16,9 @@ pub mod sink;
 pub use audio::{
     AudioFrame, AudioSource, FRAME_SAMPLES, SourceDescriptor, SourceKind, TARGET_SAMPLE_RATE,
 };
-pub use config::{Config, Engine, MAX_COOLDOWN_MS, SharedModels, Wakeword};
+pub use config::{
+    Config, Engine, MAX_COOLDOWN_MS, SharedModels, Wakeword, WyomingConfig, WyomingMode,
+};
 pub use dbus::{DaemonProxy, DetectionEntry, WakewordSnapshot};
 pub use error::{Error, Result};
 pub use sink::{Detection, DetectionSink, ScoreSnapshot};
