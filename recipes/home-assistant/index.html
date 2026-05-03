@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark" data-bs-core="modern"><head>
+    <title>Home Assistant | horchd docs</title>
+
+    <meta charset="UTF-8">
+    <meta name="description" content="Plug horchd into Home Assistant&#39;s voice pipeline as a Wyoming-protocol wake-word engine. Auto-discovered over mDNS — no IP-typing required.">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0c0a08">
+    <meta name="color-scheme" content="dark">
+    <meta name="author" content="NewtTheWolf">
+    
+
+    <link rel="canonical" href="https://docs.horchd.xyz/recipes/home-assistant/">
+
+    <meta property="og:title" content="Home Assistant | horchd docs">
+    <meta property="og:description" content="Plug horchd into Home Assistant&#39;s voice pipeline as a Wyoming-protocol wake-word engine. Auto-discovered over mDNS — no IP-typing required.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://docs.horchd.xyz/recipes/home-assistant/">
+    <meta property="og:site_name" content="horchd docs">
+    <meta property="og:locale" content="en_US">
+    <meta property="og:image" content="https://docs.horchd.xyz/assets/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:alt" content="horchd docs">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Home Assistant | horchd docs">
+    <meta name="twitter:description" content="Plug horchd into Home Assistant&#39;s voice pipeline as a Wyoming-protocol wake-word engine. Auto-discovered over mDNS — no IP-typing required.">
+    <meta name="twitter:image" content="https://docs.horchd.xyz/assets/og-image.png">
+    <meta name="twitter:image:alt" content="horchd docs">
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/favicon.svg">
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://docs.horchd.xyz/#website",
+            "url": "https://docs.horchd.xyz/",
+            "name": "horchd documentation",
+            "description": "Official documentation for horchd — the native Linux multi-wakeword detection daemon. Install, configure, and subscribe to the D-Bus signal.",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://horchd.xyz/#software" }
+          },
+          {
+            "@type": "TechArticle",
+            "@id": "https://docs.horchd.xyz/recipes/home-assistant/#page",
+            "url": "https://docs.horchd.xyz/recipes/home-assistant/",
+            "name": "Home Assistant | horchd docs",
+            "headline": "Home Assistant",
+            "description": "Plug horchd into Home Assistant's voice pipeline as a Wyoming-protocol wake-word engine. Auto-discovered over mDNS — no IP-typing required.",
+            "isPartOf": { "@id": "https://docs.horchd.xyz/#website" },
+            "inLanguage": "en",
+            "image": "https://docs.horchd.xyz/assets/og-image.png",
+            "author": {
+              "@type": "Person",
+              "name": "NewtTheWolf",
+              "url": "https://codeberg.org/NewtTheWolf"
+            },
+            "about": {
+              "@type": "SoftwareApplication",
+              "@id": "https://horchd.xyz/#software",
+              "name": "horchd",
+              "url": "https://horchd.xyz/",
+              "operatingSystem": "Linux",
+              "applicationCategory": "UtilitiesApplication",
+              "codeRepository": "https://codeberg.org/NewtTheWolf/horchd",
+              "license": "MIT OR Apache-2.0"
+            }
+          }
+        ]
+      }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" as="style">
+    <link rel="preload" href="https://fonts.codeberg.org/dist/fontawesome6/css/svg-with-js.css" as="style">
+
+    <link rel="stylesheet" type="text/css" href="/halfmoon.css">
+
+    <link rel="stylesheet" type="text/css" href="/assets/css/horchd-docs.css">
+    <!-- Syntax highlighting -->
+    <link rel="stylesheet" type="text/css" href="/assets/css/prism-nord.css">
+
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+    <!-- Details and License: https://fonts.codeberg.org/fonts/fontawesome5 -->
+    <link rel="stylesheet" type="text/css" href="https://fonts.codeberg.org/dist/fontawesome6/css/svg-with-js.css">
+
+    <link href="/pagefind/pagefind-modular-ui.css" rel="stylesheet">
+    <script src="/pagefind/pagefind-modular-ui.js"></script>
+    <script>
+      window.addEventListener('DOMContentLoaded', (event) => {
+        const instance = new PagefindModularUI.Instance();
+        instance.add(
+          new PagefindModularUI.Input({
+            containerElement: '#search-input',
+          }),
+        );
+        instance.add(
+          new PagefindModularUI.ResultList({
+            containerElement: '#search-results',
+          }),
+        );
+        document.addEventListener(
+          'keydown',
+          (event) => {
+            if (event.key == '/') {
+              event.preventDefault();
+              document.getElementById('search-input').focus();
+            }
+          },
+          false,
+        );
+      });
+    </script>
+
+    
+    <script>
+      // @license magnet:?xt=urn:btih:90dc5c0be029de84e523b9b3922520e79e0e6f08&dn=cc0.txt CC0
+      document.addEventListener('DOMContentLoaded', function () {
+        document.getElementsByClassName('active')[0].scrollIntoView({ block: 'center' });
+      });
+      // @license-end
+    </script>
+    
+    <script src="/assets/js/index.js"></script>
+  </head>
+
+  <body class="position-relative ps-lg-sbwidth">
+    <nav class="sidebar offcanvas-start offcanvas-lg">
+      <div class="offcanvas-header position-relative justify-content-start flex-shrink-0 py-0">
+        <a class="sidebar-brand d-flex align-items-center me-auto" href="/">
+          <img src="/assets/horchd-logo.png" class="d-block flex-shrink-0 me-2" height="28" width="28" alt="horchd">
+          <span class="brand-text">horchd</span><span class="brand-tag ms-1">docs</span>
+        </a>
+        <button type="button" class="btn btn-secondary btn-square d-none d-lg-inline-block" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+          <svg data-prefix="fas" data-icon="moon" class="svg-inline--fa fa-moon" role="img" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M256 0C114.6 0 0 114.6 0 256S114.6 512 256 512c68.8 0 131.3-27.2 177.3-71.4 7.3-7 9.4-17.9 5.3-27.1s-13.7-14.9-23.8-14.1c-4.9 .4-9.8 .6-14.8 .6-101.6 0-184-82.4-184-184 0-72.1 41.5-134.6 102.1-164.8 9.1-4.5 14.3-14.3 13.1-24.4S322.6 8.5 312.7 6.3C294.4 2.2 275.4 0 256 0z"></path></svg>
+        </button>
+        <button type="button" class="btn-close d-lg-none ms-1" aria-label="Close" onclick="toggleSidebar()"></button>
+      </div>
+      <div class="offcanvas-body position-relative p-0">
+        <div class="filter-docs sticky-top p-3">
+          <input id="search-input" type="text" class="form-control search" placeholder="Filter docs" aria-label="Filter docs">
+          <div class="mt-1">
+            <small>Press
+              <kbd class="text-body" style="font-size: 10px; background-color: hsla(var(--bs-emphasis-color-hsl), 0.1)">/</kbd>
+              to focus</small>
+          </div>
+        </div>
+        <div class="p-3 pt-0">
+          <div id="search-results"></div>
+          <ul class="sidebar-nav list">
+            
+          <li class="position-relative mt-4 mb-1">
+            <h5 class="sidebar-header ">
+              <a class="text-decoration-none link-white" href="/getting-started/" id="getting-started"><svg data-prefix="fas" data-icon="play" class="svg-inline--fa fa-play" role="img" viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M91.2 36.9c-12.4-6.8-27.4-6.5-39.6 .7S32 57.9 32 72l0 368c0 14.1 7.5 27.2 19.6 34.4s27.2 7.5 39.6 .7l336-184c12.8-7 20.8-20.5 20.8-35.1s-8-28.1-20.8-35.1l-336-184z"></path></svg> Getting started</a>
+            </h5>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/getting-started/install/" class="nav-link " id="sidebar-install">
+              <span class="name">Install</span>
+            </a>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/getting-started/quickstart/" class="nav-link " id="sidebar-quickstart">
+              <span class="name">Quickstart</span>
+            </a>
+          </li>
+               
+          <li class="position-relative mt-4 mb-1">
+            <h5 class="sidebar-header ">
+              <a class="text-decoration-none link-white" href="/reference/" id="reference"><svg data-prefix="fas" data-icon="book" class="svg-inline--fa fa-book" role="img" viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M384 512L96 512c-53 0-96-43-96-96L0 96C0 43 43 0 96 0L400 0c26.5 0 48 21.5 48 48l0 288c0 20.9-13.4 38.7-32 45.3l0 66.7c17.7 0 32 14.3 32 32s-14.3 32-32 32l-32 0zM96 384c-17.7 0-32 14.3-32 32s14.3 32 32 32l256 0 0-64-256 0zm32-232c0 13.3 10.7 24 24 24l176 0c13.3 0 24-10.7 24-24s-10.7-24-24-24l-176 0c-13.3 0-24 10.7-24 24zm24 72c-13.3 0-24 10.7-24 24s10.7 24 24 24l176 0c13.3 0 24-10.7 24-24s-10.7-24-24-24l-176 0z"></path></svg> Reference</a>
+            </h5>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/reference/configuration/" class="nav-link " id="sidebar-configuration">
+              <span class="name">Configuration</span>
+            </a>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/reference/dbus-api/" class="nav-link " id="sidebar-dbus-api">
+              <span class="name">D-Bus API</span>
+            </a>
+          </li>
+               
+          <li class="position-relative mt-4 mb-1">
+            <h5 class="sidebar-header  active">
+              <a class="text-decoration-none link-white" href="/recipes/" id="recipes"><svg data-prefix="fas" data-icon="code" class="svg-inline--fa fa-code" role="img" viewBox="0 0 576 512" aria-hidden="true"><path fill="currentColor" d="M360.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm64.6 136.1c-12.5 12.5-12.5 32.8 0 45.3l73.4 73.4-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l96-96c12.5-12.5 12.5-32.8 0-45.3l-96-96c-12.5-12.5-32.8-12.5-45.3 0zm-274.7 0c-12.5-12.5-32.8-12.5-45.3 0l-96 96c-12.5 12.5-12.5 32.8 0 45.3l96 96c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 150.6 182.6c12.5-12.5 12.5-32.8 0-45.3z"></path></svg> Subscriber recipes</a>
+            </h5>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/recipes/home-assistant/" class="nav-link  active" id="sidebar-home-assistant">
+              <span class="name">Home Assistant</span>
+            </a>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/recipes/bash-subscriber/" class="nav-link " id="sidebar-bash-subscriber">
+              <span class="name">Bash</span>
+            </a>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/recipes/python-subscriber/" class="nav-link " id="sidebar-python-subscriber">
+              <span class="name">Python</span>
+            </a>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/recipes/rust-subscriber/" class="nav-link " id="sidebar-rust-subscriber">
+              <span class="name">Rust</span>
+            </a>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/recipes/process-audio/" class="nav-link " id="sidebar-process-audio">
+              <span class="name">Process recorded audio</span>
+            </a>
+          </li>
+               
+          <li class="position-relative mt-4 mb-1">
+            <h5 class="sidebar-header ">
+              <a class="text-decoration-none link-white" href="/guides/" id="guides"><svg data-prefix="fas" data-icon="compass" class="svg-inline--fa fa-compass" role="img" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M256 512a256 256 0 1 0 0-512 256 256 0 1 0 0 512zm50.7-186.9L162.4 380.6c-19.4 7.5-38.5-11.6-31-31l55.5-144.3c3.3-8.5 9.9-15.1 18.4-18.4l144.3-55.5c19.4-7.5 38.5 11.6 31 31L325.1 306.7c-3.2 8.5-9.9 15.1-18.4 18.4zM288 256a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"></path></svg> Guides</a>
+            </h5>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/guides/training/" class="nav-link " id="sidebar-training">
+              <span class="name">Training a wakeword</span>
+            </a>
+          </li>
+               
+          <li class="position-relative mt-4 mb-1">
+            <h5 class="sidebar-header ">
+              <a class="text-decoration-none link-white" href="/support/" id="support"><svg data-prefix="fas" data-icon="life-ring" class="svg-inline--fa fa-life-ring" role="img" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M367.2 412.5C335.9 434.9 297.5 448 256 448s-79.9-13.1-111.2-35.5l58-58c15.8 8.6 34 13.5 53.3 13.5s37.4-4.9 53.3-13.5l58 58zm90.7 .8c33.8-43.4 54-98 54-157.3S491.8 142.1 458 98.7c9-12.5 7.9-30.1-3.4-41.3S425.8 45 413.3 54C369.9 20.2 315.3 0 256 0S142.1 20.2 98.7 54c-12.5-9-30.1-7.9-41.3 3.4S45 86.2 54 98.7C20.2 142.1 0 196.7 0 256S20.2 369.9 54 413.3c-9 12.5-7.9 30.1 3.4 41.3S86.2 467 98.7 458c43.4 33.8 98 54 157.3 54s113.9-20.2 157.3-54c12.5 9 30.1 7.9 41.3-3.4s12.4-28.8 3.4-41.3zm-45.5-46.1l-58-58c8.6-15.8 13.5-34 13.5-53.3s-4.9-37.4-13.5-53.3l58-58C434.9 176.1 448 214.5 448 256s-13.1 79.9-35.5 111.2zM367.2 99.5l-58 58c-15.8-8.6-34-13.5-53.3-13.5s-37.4 4.9-53.3 13.5l-58-58C176.1 77.1 214.5 64 256 64s79.9 13.1 111.2 35.5zM157.5 309.3l-58 58C77.1 335.9 64 297.5 64 256s13.1-79.9 35.5-111.2l58 58c-8.6 15.8-13.5 34-13.5 53.3s4.9 37.4 13.5 53.3zM208 256a48 48 0 1 1 96 0 48 48 0 1 1 -96 0z"></path></svg> Support</a>
+            </h5>
+          </li>
+             
+          <li class="nav-item">
+            <a href="/support/faq/" class="nav-link " id="sidebar-faq">
+              <span class="name">FAQ</span>
+            </a>
+          </li>
+               
+          <li class="position-relative mt-4 mb-1">
+            <h5 class="sidebar-header ">
+              <a class="text-decoration-none link-white" href="/" id=""><svg data-prefix="fas" data-icon="caret-right" class="svg-inline--fa fa-caret-right" role="img" viewBox="0 0 256 512" aria-hidden="true"><path fill="currentColor" d="M249.3 235.8c10.2 12.6 9.5 31.1-2.2 42.8l-128 128c-9.2 9.2-22.9 11.9-34.9 6.9S64.5 396.9 64.5 384l0-256c0-12.9 7.8-24.6 19.8-29.6s25.7-2.2 34.9 6.9l128 128 2.2 2.4z"></path></svg> Overview</a>
+            </h5>
+          </li>
+           
+        </ul>
+      </div>
+    </div></nav>
+
+    <nav class="navbar navbar-expand-md docs-navbar sticky-top">
+      <div class="container-md px-3 px-sm-4 px-xl-5 py-1 justify-content-start">
+        <div class="btn-group me-3 d-lg-none">
+          <button type="button" class="btn btn-secondary btn-square" aria-label="Toggle sidebar" onclick="toggleSidebar()">
+            <svg data-prefix="fas" data-icon="bars" class="svg-inline--fa fa-bars" role="img" viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M0 96C0 78.3 14.3 64 32 64l384 0c17.7 0 32 14.3 32 32s-14.3 32-32 32L32 128C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32l384 0c17.7 0 32 14.3 32 32s-14.3 32-32 32L32 288c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32L32 448c-17.7 0-32-14.3-32-32s14.3-32 32-32l384 0c17.7 0 32 14.3 32 32z"></path></svg>
+          </button>
+          <button type="button" class="btn btn-secondary btn-square" aria-label="Toggle dark mode" onclick="toggleDarkMode()">
+            <svg data-prefix="fas" data-icon="moon" class="svg-inline--fa fa-moon" role="img" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M256 0C114.6 0 0 114.6 0 256S114.6 512 256 512c68.8 0 131.3-27.2 177.3-71.4 7.3-7 9.4-17.9 5.3-27.1s-13.7-14.9-23.8-14.1c-4.9 .4-9.8 .6-14.8 .6-101.6 0-184-82.4-184-184 0-72.1 41.5-134.6 102.1-164.8 9.1-4.5 14.3-14.3 13.1-24.4S322.6 8.5 312.7 6.3C294.4 2.2 275.4 0 256 0z"></path></svg>
+          </button>
+        </div>
+        <a class="navbar-brand d-flex align-items-center d-lg-none ms-auto ms-md-0" href="/">
+          <img src="/assets/horchd-logo.png" class="d-block flex-shrink-0 me-2" height="28" width="28" alt="horchd">
+          <span class="brand-text">horchd</span><span class="brand-tag ms-1">docs</span>
+        </a>
+        <div class="btn-group ms-auto d-md-none">
+          <a href="https://codeberg.org/NewtTheWolf/horchd/commits/branch/docs-src/./content/recipes/home-assistant.md" class="btn btn-secondary btn-square" target="_blank" rel="noreferrer">
+            <svg data-prefix="fas" data-icon="clock-rotate-left" class="svg-inline--fa fa-clock-rotate-left" role="img" viewBox="0 0 576 512" aria-hidden="true"><path fill="currentColor" d="M288 64c106 0 192 86 192 192S394 448 288 448c-65.2 0-122.9-32.5-157.6-82.3-10.1-14.5-30.1-18-44.6-7.9s-18 30.1-7.9 44.6C124.1 468.6 201 512 288 512 429.4 512 544 397.4 544 256S429.4 0 288 0C202.3 0 126.5 42.1 80 106.7L80 80c0-17.7-14.3-32-32-32S16 62.3 16 80l0 112c0 17.7 14.3 32 32 32l24.6 0c.5 0 1 0 1.5 0l86 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-38.3 0C154.9 102.6 217 64 288 64zm24 88c0-13.3-10.7-24-24-24s-24 10.7-24 24l0 104c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65 0-94.1z"></path></svg>
+          </a>
+          <a href="https://codeberg.org/NewtTheWolf/horchd/src/branch/docs-src/./content/recipes/home-assistant.md" class="btn btn-secondary btn-square" target="_blank" rel="noreferrer">
+            <svg data-prefix="fas" data-icon="code" class="svg-inline--fa fa-code" role="img" viewBox="0 0 576 512" aria-hidden="true"><path fill="currentColor" d="M360.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm64.6 136.1c-12.5 12.5-12.5 32.8 0 45.3l73.4 73.4-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l96-96c12.5-12.5 12.5-32.8 0-45.3l-96-96c-12.5-12.5-32.8-12.5-45.3 0zm-274.7 0c-12.5-12.5-32.8-12.5-45.3 0l-96 96c-12.5 12.5-12.5 32.8 0 45.3l96 96c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 150.6 182.6c12.5-12.5 12.5-32.8 0-45.3z"></path></svg>
+          </a>
+        </div>
+        <div class="collapse navbar-collapse" id="docs-navbar-collapse">
+          <div class="d-flex align-items-center justify-content-center ms-auto gap-2">
+            <a href="https://codeberg.org/NewtTheWolf/horchd/commits/branch/docs-src/./content/recipes/home-assistant.md" class="btn btn-secondary flex-grow-1 d-flex align-items-center flex-nowrap text-start position-relative" target="_blank" rel="noreferrer">
+              <svg data-prefix="fas" data-icon="clock-rotate-left" class="svg-inline--fa fa-clock-rotate-left" role="img" viewBox="0 0 576 512" aria-hidden="true"><path fill="currentColor" d="M288 64c106 0 192 86 192 192S394 448 288 448c-65.2 0-122.9-32.5-157.6-82.3-10.1-14.5-30.1-18-44.6-7.9s-18 30.1-7.9 44.6C124.1 468.6 201 512 288 512 429.4 512 544 397.4 544 256S429.4 0 288 0C202.3 0 126.5 42.1 80 106.7L80 80c0-17.7-14.3-32-32-32S16 62.3 16 80l0 112c0 17.7 14.3 32 32 32l24.6 0c.5 0 1 0 1.5 0l86 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-38.3 0C154.9 102.6 217 64 288 64zm24 88c0-13.3-10.7-24-24-24s-24 10.7-24 24l0 104c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65 0-94.1z"></path></svg> &nbsp; View History
+            </a>
+            <a href="https://codeberg.org/NewtTheWolf/horchd/src/branch/docs-src/./content/recipes/home-assistant.md" class="btn btn-secondary flex-grow-1 d-flex align-items-center flex-nowrap text-start position-relative" target="_blank" rel="noreferrer">
+              <svg data-prefix="fas" data-icon="code" class="svg-inline--fa fa-code" role="img" viewBox="0 0 576 512" aria-hidden="true"><path fill="currentColor" d="M360.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm64.6 136.1c-12.5 12.5-12.5 32.8 0 45.3l73.4 73.4-73.4 73.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l96-96c12.5-12.5 12.5-32.8 0-45.3l-96-96c-12.5-12.5-32.8-12.5-45.3 0zm-274.7 0c-12.5-12.5-32.8-12.5-45.3 0l-96 96c-12.5 12.5-12.5 32.8 0 45.3l96 96c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256 150.6 182.6c12.5-12.5 12.5-32.8 0-45.3z"></path></svg> &nbsp; View Source
+            </a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container-md px-3 px-sm-4 px-xl-5">
+      <div class="row">
+        <main class="col-xl-9 py-3 py-sm-4" data-pagefind-body="">
+          
+          <h1 id="top" class="lh-base mb-1 content-title font-size-24">Home Assistant</h1>
+           
+
+          <div class="content">
+            
+<nav class="mb-3 d-xl-none" data-pagefind-ignore="all">
+  <details class="collapse-panel">
+    <summary class="btn btn-secondary d-block w-100 py-2 d-flex align-items-center justify-content-between">
+      <span class="antialiased">On this page</span>
+      <svg data-prefix="fas" data-icon="angle-down" class="svg-inline--fa fa-angle-down" role="img" viewBox="0 0 384 512" aria-hidden="true"><path fill="currentColor" d="M169.4 374.6c12.5 12.5 32.8 12.5 45.3 0l160-160c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 306.7 54.6 169.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l160 160z"></path></svg>
+    </summary>
+    <div id="toc" class="border rounded mt-2">
+      <ol><li><a class="simple-link d-block p-1" href="#60-second-walkthrough">60-second walkthrough</a><ol><li><a class="simple-link d-block p-1" href="#1.-enable-the-wyoming-server-in-horchd">1. Enable the Wyoming server in horchd</a></li>
+<li><a class="simple-link d-block p-1" href="#2.-verify-the-wire">2. Verify the wire</a></li>
+<li><a class="simple-link d-block p-1" href="#3.-add-the-integration-in-home-assistant">3. Add the integration in Home Assistant</a></li>
+<li><a class="simple-link d-block p-1" href="#4.-wire-it-into-a-voice-assistant-pipeline">4. Wire it into a Voice Assistant pipeline</a></li></ol></li>
+<li><a class="simple-link d-block p-1" href="#modes-%E2%80%94-pick-the-right-one">Modes — pick the right one</a></li>
+<li><a class="simple-link d-block p-1" href="#audio-format-expectations">Audio format expectations</a></li>
+<li><a class="simple-link d-block p-1" href="#troubleshooting">Troubleshooting</a><ol><li><a class="simple-link d-block p-1" href="#ha-doesn't-discover-horchd">HA doesn't discover horchd</a></li>
+<li><a class="simple-link d-block p-1" href="#ha-discovers-it-but-no-detections-fire">HA discovers it but no detections fire</a></li>
+<li><a class="simple-link d-block p-1" href="#live-monitoring">Live monitoring</a></li></ol></li></ol>
+    </div>
+  </details>
+</nav>
+
+
+            <p>horchd embeds a <a href="https://github.com/OHF-Voice/wyoming">Wyoming-protocol</a>
+listener so Home Assistant's voice pipeline talks to it directly — no
+<code>wyoming-openwakeword</code> Python bridge in the middle. The integration is
+auto-discovered over mDNS (<code>_wyoming._tcp.local.</code>) and behaves exactly
+like the upstream wake-word engine HA expects.</p>
+<h2 class="h2 content-title" id="60-second-walkthrough" tabindex="-1"><a class="header-anchor" href="#60-second-walkthrough">60-second walkthrough</a></h2>
+<h3 class="h3 content-title" id="1.-enable-the-wyoming-server-in-horchd" tabindex="-1"><a class="header-anchor" href="#1.-enable-the-wyoming-server-in-horchd">1. Enable the Wyoming server in horchd</a></h3>
+<pre class="language-bash"><code class="language-bash">horchctl wyoming <span class="token builtin class-name">enable</span> <span class="token parameter variable">--save</span>
+horchctl wyoming status
+<span class="token comment"># enabled: true</span>
+<span class="token comment"># mode:    wyoming-server</span>
+<span class="token comment"># listen:</span>
+<span class="token comment">#   tcp://0.0.0.0:10400</span></code></pre>
+<p><code>--save</code> writes <code>[wyoming].enabled = true</code> back to <code>config.toml</code> so the
+choice survives restarts. Drop <code>--save</code> if you just want a transient
+test session.</p>
+<p>For HA's standard voice-pipeline flow you want <strong><code>mode = &quot;wyoming-server&quot;</code></strong>
+— each connecting HA satellite streams its own audio to horchd. If
+you're not sure, check:</p>
+<pre class="language-bash"><code class="language-bash"><span class="token function">grep</span> <span class="token parameter variable">-A1</span> <span class="token string">'\[wyoming\]'</span> ~/.config/horchd/config.toml <span class="token operator">|</span> <span class="token function">grep</span> mode</code></pre>
+<p>If you see <code>mode = &quot;local-mic&quot;</code> or no line at all, edit the file:</p>
+<pre class="language-toml"><code class="language-toml"><span class="token comment"># ~/.config/horchd/config.toml</span>
+<span class="token punctuation">[</span><span class="token table class-name">wyoming</span><span class="token punctuation">]</span>
+<span class="token key property">enabled</span> <span class="token punctuation">=</span> <span class="token boolean">true</span>
+<span class="token key property">mode</span> <span class="token punctuation">=</span> <span class="token string">"wyoming-server"</span>
+<span class="token key property">listen</span> <span class="token punctuation">=</span> <span class="token punctuation">[</span><span class="token string">"tcp://0.0.0.0:10400"</span><span class="token punctuation">]</span>
+<span class="token key property">zeroconf</span> <span class="token punctuation">=</span> <span class="token boolean">true</span></code></pre>
+<p>…and <code>horchctl reload</code> (or restart the daemon — <code>mode</code> changes apply
+to new connections only).</p>
+<h3 class="h3 content-title" id="2.-verify-the-wire" tabindex="-1"><a class="header-anchor" href="#2.-verify-the-wire">2. Verify the wire</a></h3>
+<pre class="language-bash"><code class="language-bash"><span class="token builtin class-name">echo</span> <span class="token string">'{"type":"describe"}'</span> <span class="token operator">|</span> <span class="token function">nc</span> <span class="token parameter variable">-q1</span> <span class="token number">127.0</span>.0.1 <span class="token number">10400</span></code></pre>
+<p>You should get back two lines: a Wyoming header, then a JSON
+<code>info</code> event listing every wakeword you've registered. If that works,
+HA can talk to it.</p>
+<h3 class="h3 content-title" id="3.-add-the-integration-in-home-assistant" tabindex="-1"><a class="header-anchor" href="#3.-add-the-integration-in-home-assistant">3. Add the integration in Home Assistant</a></h3>
+<ol>
+<li><strong>Settings → Devices &amp; services → Add Integration</strong></li>
+<li>Search for <strong>Wyoming Protocol</strong></li>
+<li>horchd should be auto-discovered as <code>horchd-&lt;hostname&gt;</code>. Click it.</li>
+<li>If discovery is blocked on your network, pick &quot;Manual&quot; and enter the
+horchd host's IP and port <code>10400</code>.</li>
+</ol>
+<p>The integration creates a wake-word entity per registered wakeword.</p>
+<h3 class="h3 content-title" id="4.-wire-it-into-a-voice-assistant-pipeline" tabindex="-1"><a class="header-anchor" href="#4.-wire-it-into-a-voice-assistant-pipeline">4. Wire it into a Voice Assistant pipeline</a></h3>
+<ol>
+<li><strong>Settings → Voice assistants</strong> → existing pipeline (or new)</li>
+<li><strong>Wake word engine</strong> → pick <code>horchd</code></li>
+<li><strong>Wake word</strong> → pick the entity for the wakeword you want
+(e.g. <code>alexa</code>)</li>
+<li>Save.</li>
+</ol>
+<p>Now: speak the wakeword to any HA satellite (HA Voice PE, ESP32-S3-BOX,
+the HA Companion app's wake-word forwarder, etc.). The satellite streams
+audio to horchd over Wyoming, horchd detects, replies with a <code>detection</code>
+event, and HA's pipeline transitions into STT.</p>
+<h2 class="h2 content-title" id="modes-%E2%80%94-pick-the-right-one" tabindex="-1"><a class="header-anchor" href="#modes-%E2%80%94-pick-the-right-one">Modes — pick the right one</a></h2>
+<table class="table">
+<thead>
+<tr>
+<th><code>[wyoming].mode</code></th>
+<th>Audio source</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>wyoming-server</code></td>
+<td>each HA satellite streams its own audio</td>
+<td><strong>Standard HA voice pipeline.</strong> Per-connection isolated inference state — multiple satellites don't interfere.</td>
+</tr>
+<tr>
+<td><code>local-mic</code></td>
+<td>the daemon's local microphone</td>
+<td>&quot;horchd at my desk, broadcast wakewords to HA as generic events&quot;. Client <code>audio-chunk</code>s are ignored.</td>
+</tr>
+<tr>
+<td><code>hybrid</code></td>
+<td>both at once</td>
+<td>Local mic AND remote satellites. Maximum flexibility, doubled inference cost.</td>
+</tr>
+</tbody>
+</table>
+<p>The default is <code>local-mic</code> — if you want HA to actually drive the
+audio (which is what their voice pipeline expects), switch to
+<code>wyoming-server</code>.</p>
+<h2 class="h2 content-title" id="audio-format-expectations" tabindex="-1"><a class="header-anchor" href="#audio-format-expectations">Audio format expectations</a></h2>
+<p>v1 only accepts the openWakeWord canonical format:</p>
+<ul>
+<li>16 000 Hz</li>
+<li>1 channel (mono)</li>
+<li>16-bit signed (<code>width = 2</code>)</li>
+</ul>
+<p>Every shipping HA Wyoming satellite already emits this — Voice PE,
+ESP32-S3-BOX, Wyoming-Satellite, the Companion-app forwarder. If you
+see logs like <code>Wyoming client offered audio at 48000 Hz; horchd needs 16000 Hz</code>, the satellite is misconfigured (force the 16 kHz pipeline
+in its YAML / settings). Resampling is on the roadmap but not wired
+yet.</p>
+<h2 class="h2 content-title" id="troubleshooting" tabindex="-1"><a class="header-anchor" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 class="h3 content-title" id="ha-doesn't-discover-horchd" tabindex="-1"><a class="header-anchor" href="#ha-doesn't-discover-horchd">HA doesn't discover horchd</a></h3>
+<ul>
+<li>mDNS is blocked on your network. Try the manual IP entry instead.</li>
+<li>Confirm the listener is up: <code>horchctl wyoming status</code> and
+<code>ss -tlnp | grep 10400</code>.</li>
+<li>Check the daemon log: <code>journalctl --user -u horchd -f</code>. You should
+see <code>Wyoming TCP listening</code> and <code>Wyoming mDNS announced</code> lines.</li>
+</ul>
+<h3 class="h3 content-title" id="ha-discovers-it-but-no-detections-fire" tabindex="-1"><a class="header-anchor" href="#ha-discovers-it-but-no-detections-fire">HA discovers it but no detections fire</a></h3>
+<ul>
+<li>Wrong mode. Check <code>horchctl wyoming status</code> — must be
+<code>wyoming-server</code> (or <code>hybrid</code>) for HA to actually drive the audio.</li>
+<li>Wakeword filter mismatch. The HA integration sends a <code>detect</code> event
+with the wakeword names it cares about. If those names don't match
+any of your <code>[[wakeword]] name = &quot;...&quot;</code> entries, nothing fires.
+<code>horchctl wakeword list</code> to see what's registered.</li>
+<li>Satellite sending the wrong audio format. Daemon log will say so.</li>
+</ul>
+<h3 class="h3 content-title" id="live-monitoring" tabindex="-1"><a class="header-anchor" href="#live-monitoring">Live monitoring</a></h3>
+<pre class="language-bash"><code class="language-bash">horchctl monitor
+<span class="token comment"># 0.834567   alexa                     ts=12345678901</span></code></pre>
+<p>Note: <code>horchctl monitor</code> reads the D-Bus <code>Detected</code> signal — that fires
+for the <strong>local mic pipeline</strong> (<code>local-mic</code> and <code>hybrid</code> modes). In
+pure <code>wyoming-server</code> mode the local mic isn't running, so D-Bus stays
+silent; the detection goes back to the HA satellite over Wyoming
+instead.</p>
+
+          </div>
+          <div class="card" data-pagefind-ignore="all">
+  <div class="card-body">
+    <h5 class="card-title">Found a bug? Improve a section?</h5>
+    <div class="card-text">
+      <p class="mb-2">
+        These docs live on the <code>docs-src</code> branch of
+        <a href="https://codeberg.org/NewtTheWolf/horchd/src/branch/docs-src">codeberg.org/NewtTheWolf/horchd</a>.
+        File an issue or send a pull request — even a typo fix is welcome.
+      </p>
+      <p class="mb-0 small text-muted">
+        For bugs and feature requests against the daemon itself, head to
+        <a href="https://codeberg.org/NewtTheWolf/horchd/issues">the horchd issue tracker</a>.
+      </p>
+    </div>
+  </div>
+</div>
+
+        </main>
+        
+<nav class="col-xl-3 position-relative d-none d-xl-block" id="toc-side" data-pagefind-ignore="all">
+  <div class="position-sticky start-0 py-3 py-sm-4 ps-4" style="top: 63px;">
+    <span class="h4 lh-base">On this page</span>
+    <div id="toc" class="overflow-y-auto pe-2" style="max-height: 43.75rem;">
+      <ol><li><a class="simple-link d-block p-1" href="#60-second-walkthrough">60-second walkthrough</a><ol><li><a class="simple-link d-block p-1" href="#1.-enable-the-wyoming-server-in-horchd">1. Enable the Wyoming server in horchd</a></li>
+<li><a class="simple-link d-block p-1" href="#2.-verify-the-wire">2. Verify the wire</a></li>
+<li><a class="simple-link d-block p-1" href="#3.-add-the-integration-in-home-assistant">3. Add the integration in Home Assistant</a></li>
+<li><a class="simple-link d-block p-1" href="#4.-wire-it-into-a-voice-assistant-pipeline">4. Wire it into a Voice Assistant pipeline</a></li></ol></li>
+<li><a class="simple-link d-block p-1" href="#modes-%E2%80%94-pick-the-right-one">Modes — pick the right one</a></li>
+<li><a class="simple-link d-block p-1" href="#audio-format-expectations">Audio format expectations</a></li>
+<li><a class="simple-link d-block p-1" href="#troubleshooting">Troubleshooting</a><ol><li><a class="simple-link d-block p-1" href="#ha-doesn't-discover-horchd">HA doesn't discover horchd</a></li>
+<li><a class="simple-link d-block p-1" href="#ha-discovers-it-but-no-detections-fire">HA discovers it but no detections fire</a></li>
+<li><a class="simple-link d-block p-1" href="#live-monitoring">Live monitoring</a></li></ol></li></ol>
+    </div>
+  </div>
+</nav>
+
+
+      </div>
+    </div>
+
+    <footer class="docs-footer" data-pagefind-ignore="all">
+      <div class="container-md px-3 px-sm-4 px-xl-5 py-3">
+        <p class="mb-1">
+          horchd documentation · MIT or Apache-2.0 ·
+          <a href="https://codeberg.org/NewtTheWolf/horchd">source on Codeberg</a> ·
+          <a href="https://github.com/horchd/horchd">github mirror</a>
+        </p>
+        <p class="text-muted small mb-0">
+          Site template adapted from
+          <a href="https://codeberg.org/Codeberg/Documentation">Codeberg Documentation</a>
+          (CC-BY-SA 4.0). Eleventy + Halfmoon.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
