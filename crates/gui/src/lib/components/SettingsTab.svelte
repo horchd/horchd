@@ -151,7 +151,7 @@
     </header>
     <p class="m-0 text-[12px] leading-[1.6] text-muted">
       horchd · native multi-wakeword detection daemon ·
-      <a class="text-accent border-b border-current no-underline" href="https://github.com/horchd/horchd" target="_blank" rel="noopener">github.com/horchd/horchd</a>
+      <a class="text-accent border-b border-current no-underline" href="https://codeberg.org/NewtTheWolf/horchd" target="_blank" rel="noopener">codeberg.org/NewtTheWolf/horchd</a>
     </p>
   </div>
 </section>

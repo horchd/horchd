@@ -74,7 +74,7 @@ CNAME  docs.horchd.xyz  docs.horchd.NewtTheWolf.codeberg.page.
 | | |
 | --- | --- |
 | Project name | `horchd` |
-| GitHub org/repo | `github.com/horchd/horchd` |
+| Codeberg repo | `codeberg.org/NewtTheWolf/horchd` (GitHub mirror at `github.com/NewtTheWolf/horchd`, redirect-only) |
 | Domain | `horchd.xyz` |
 | License | `MIT OR Apache-2.0` (both LICENSE files at repo root) |
 | Rust edition | `2024` |

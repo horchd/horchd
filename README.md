@@ -5,7 +5,7 @@
 > `Detected` signal the moment one fires.
 
 [![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
-[![docs](https://img.shields.io/badge/docs-horchd.github.io-c8311c)](https://horchd.github.io)
+[![docs](https://img.shields.io/badge/docs-docs.horchd.xyz-c8311c)](https://docs.horchd.xyz)
 
 `horchd` is a tiny Rust daemon (≈6 MB binary, ~1% CPU at idle) that
 ports the [openWakeWord](https://github.com/dscripka/openWakeWord)
@@ -154,7 +154,7 @@ horchd/
 ### From source
 
 ```bash
-git clone https://github.com/horchd/horchd
+git clone https://codeberg.org/NewtTheWolf/horchd
 cd horchd
 
 # Drop the universal preprocessing models (one-time setup)
@@ -277,7 +277,7 @@ the next section.
 | `Detected`      | `s name`, `d score`, `t timestamp_us` | Rising-edge fire after threshold + cooldown. |
 | `ScoreSnapshot` | `s name`, `d score`                   | ~5 Hz per-wakeword score; for live UI meters. |
 
-Full reference + introspection output: <https://horchd.github.io/dbus-api>.
+Full reference + introspection output: <https://docs.horchd.xyz/reference/dbus-api/>.
 
 ## Wyoming server (Home Assistant)
 
@@ -504,7 +504,7 @@ cooldown_ms = 1500           # default
 enabled = true               # default
 ```
 
-Field reference: <https://horchd.github.io/config>.
+Field reference: <https://docs.horchd.xyz/reference/configuration/>.
 
 ## Develop
 
@@ -587,10 +587,10 @@ This project stands on:
 
 ## Contributing
 
-Issues + PRs welcome at <https://github.com/horchd/horchd>. Run
+Issues + PRs welcome at <https://codeberg.org/NewtTheWolf/horchd>. Run
 `cargo fmt --all` and `cargo clippy --workspace --all-targets -- -D
 warnings` before opening one. The full build plan + design notes live
-at <https://horchd.github.io>.
+at <https://docs.horchd.xyz>.
 
 ## License
 

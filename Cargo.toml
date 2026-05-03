@@ -14,7 +14,7 @@ edition = "2024"
 rust-version = "1.87"
 license = "MIT OR Apache-2.0"
 authors = ["spitzli"]
-repository = "https://github.com/horchd/horchd"
+repository = "https://codeberg.org/NewtTheWolf/horchd"
 homepage = "https://horchd.xyz"
 
 [workspace.dependencies]
