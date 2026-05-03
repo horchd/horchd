@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use horchd_client::WyomingMode;
 use tokio::io::BufReader;
 use tokio::net::{TcpListener, UnixListener};
 use tokio::task::JoinHandle;
@@ -22,12 +21,16 @@ use crate::state::SharedState;
 use crate::wyoming::handler::handle;
 use crate::wyoming::uri::ListenAddr;
 
-/// Snapshot of the daemon-side handles a connection needs to do its job.
-/// Cheap to clone via `Arc`.
+/// Daemon-side handles every connection handler needs. Held in an
+/// `Arc` and shared across all accept loops + connection tasks.
+///
+/// Note: the Wyoming mode is read fresh from `state` at the start of
+/// each connection so a `horchctl reload` (which can rewrite
+/// `[wyoming].mode`) takes effect for new clients without a Wyoming
+/// stop/start cycle.
 pub struct ServerCtx {
     pub state: SharedState,
     pub pipeline: Arc<Pipeline>,
-    pub mode: WyomingMode,
 }
 
 /// Bind every requested listener and spawn its accept loop. Returns the

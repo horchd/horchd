@@ -52,11 +52,10 @@ pub async fn start(
     state: &SharedState,
     pipeline: &Arc<Pipeline>,
 ) -> Result<Option<WyomingHandles>> {
-    let (enabled, mode, listen, zeroconf, service_name) = {
+    let (enabled, listen, zeroconf, service_name) = {
         let s = state.lock().await;
         (
             s.config.wyoming.enabled,
-            s.config.wyoming.mode,
             s.config.wyoming.listen.clone(),
             s.config.wyoming.zeroconf,
             s.config.wyoming.service_name.clone(),
@@ -75,7 +74,6 @@ pub async fn start(
     let ctx = Arc::new(ServerCtx {
         state: Arc::clone(state),
         pipeline: Arc::clone(pipeline),
-        mode,
     });
     let listeners = serve(addrs.clone(), ctx).await?;
 

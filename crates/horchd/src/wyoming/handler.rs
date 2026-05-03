@@ -44,7 +44,6 @@ struct ClientPipeline {
     /// Aborted on drop as a backup; clean shutdown happens via `pcm_tx`
     /// drop → frame channel close → `pipeline.run` returns.
     task: JoinHandle<()>,
-    started_at: Instant,
 }
 
 impl Drop for ClientPipeline {
@@ -65,10 +64,14 @@ where
     R: AsyncBufRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    tracing::info!(%peer, mode = ?ctx.mode, "Wyoming client connected");
+    // Snapshot the mode here so a `horchctl reload` between connections
+    // can rewrite it without restarting the listener — but this client's
+    // session keeps the mode it negotiated at accept time.
+    let mode = ctx.state.lock().await.config.wyoming.mode;
+    tracing::info!(%peer, ?mode, "Wyoming client connected");
 
-    let subscribe_to_live = matches!(ctx.mode, WyomingMode::LocalMic | WyomingMode::Hybrid);
-    let allow_client_audio = matches!(ctx.mode, WyomingMode::WyomingServer | WyomingMode::Hybrid);
+    let subscribe_to_live = matches!(mode, WyomingMode::LocalMic | WyomingMode::Hybrid);
+    let allow_client_audio = matches!(mode, WyomingMode::WyomingServer | WyomingMode::Hybrid);
 
     let mut live_detections = subscribe_to_live.then(|| ctx.pipeline.subscribe_detections());
     let mut filter: Option<Vec<String>> = None;
@@ -169,10 +172,15 @@ where
                 match recv {
                     Some(det) => {
                         if filter_match(filter.as_ref(), &det.name) {
-                            let ts_ms = client
-                                .as_ref()
-                                .map(|c| u64::try_from(c.started_at.elapsed().as_millis()).unwrap_or(u64::MAX))
-                                .unwrap_or_default();
+                            // TransientPipeline drives the detector
+                            // clock from a virtual frame counter starting
+                            // at 0, so `det.timestamp_us` is already the
+                            // microsecond offset into THIS client's audio
+                            // stream. Wall-clock since spawn would lie
+                            // when HA bursts buffered audio faster than
+                            // realtime (Test-Claude #5 caught this:
+                            // ts=20ms while user spoke at 600ms in).
+                            let ts_ms = det.timestamp_us / 1_000;
                             write_detection(&mut writer, &det, ts_ms, &peer).await?;
                         }
                     }
@@ -272,6 +280,5 @@ async fn spawn_client_pipeline(ctx: &ServerCtx, peer: &str) -> Result<ClientPipe
         pcm_tx,
         det_rx,
         task,
-        started_at: Instant::now(),
     })
 }
