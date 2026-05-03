@@ -1,0 +1,15 @@
+target/
+**/target/
+node_modules/
+**/node_modules/
+.git/
+.svelte-kit/
+**/.svelte-kit/
+crates/gui/build/
+shared-models/
+tasks/
+plan.md
+*.swp
+*.tmp
+.vscode/
+.idea/

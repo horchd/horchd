@@ -188,10 +188,44 @@ yay -S horchd       # paru / makepkg also fine
 The package depends on `pipewire`. After install, drop the shared models
 into `/usr/share/horchd/` and `systemctl --user enable --now horchd`.
 
-### Docker / Nix
+### Docker
 
-Out of scope for v0.1 — the daemon needs raw mic access and a real
-session bus, both of which fight container isolation. PRs welcome.
+For headless wyoming-server deployments (HA voice pipeline talks to
+horchd over TCP, no host audio device needed):
+
+```bash
+docker run --rm -d \
+    --name horchd \
+    -p 10400:10400 \
+    -v horchd-data:/data \
+    ghcr.io/newtthewolf/horchd:latest
+
+# Import wakewords inside the container:
+docker exec -it horchd horchctl wakeword import \
+    https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx
+```
+
+A ready-to-run compose file lives at
+[`docker/compose.example.yml`](./docker/compose.example.yml).
+
+The container ships with `engine.local_mic = false` baked in — the
+daemon serves Wyoming clients only, no cpal mic open. If you want both
+local mic AND container, expose `/dev/snd` and mount the PipeWire
+socket; that's not a primary use case but documented in the compose
+file's comments.
+
+The two openWakeWord shared models (`melspectrogram.onnx`,
+`embedding_model.onnx`) are baked into the image (Apache-2.0
+attribution at `/usr/local/share/horchd/ATTRIBUTION.md`). Bring your
+own classifier `.onnx` files via the `/data` volume (default models
+dir inside the container = `/data/horchd/models/`).
+
+Multi-arch image: `linux/amd64` and `linux/arm64` (no armv7 — HA
+Supervisor 2026.03 dropped it).
+
+### Nix
+
+Out of scope for v0.1. PRs welcome.
 
 ## First wakeword (60-second walkthrough)
 

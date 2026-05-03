@@ -3,6 +3,7 @@
 .DS_Store
 /tasks/
 /plan.md
+/.claude/
 /shared-models/*.onnx
 # Tauri auto-generates these on every build
 /crates/gui/src-tauri/gen/

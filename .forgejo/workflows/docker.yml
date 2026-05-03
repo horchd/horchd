@@ -1,0 +1,94 @@
+# Build + push the multi-arch horchd Docker image to GitHub Container
+# Registry. Runs ONLY on:
+#   - git-tag pushes matching `v*` (intentional release)
+#   - manual dispatch from the Forgejo UI (emergency rebuild)
+#
+# Push-to-main is deliberately NOT a trigger — every commit would burn
+# a full multi-arch QEMU build (~25 min) and clutter ghcr.io with
+# throw-away tags.
+#
+# Required secrets in Codeberg → repo settings → Actions → Secrets:
+#   - GHCR_USER  : your GitHub username (image owner — `newtthewolf`)
+#   - GHCR_TOKEN : a GitHub PAT with `write:packages` scope
+#                  (https://github.com/settings/tokens/new?scopes=write:packages)
+
+name: Docker
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Override image tag (default: branch name)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: newtthewolf/horchd
+
+jobs:
+  build-and-push:
+    runs-on: docker
+    container:
+      image: catthehacker/ubuntu:act-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USER }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # vX.Y.Z → "X.Y.Z"
+            type=semver,pattern={{version}}
+            # vX.Y.Z → "X.Y" (only on stable releases — not pre-release)
+            type=semver,pattern={{major}}.{{minor}}
+            # latest only on stable (non-pre-release) tags
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            # Manual workflow_dispatch override
+            type=raw,value=${{ inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+          labels: |
+            org.opencontainers.image.title=horchd
+            org.opencontainers.image.description=Native Linux multi-wakeword detection daemon with Wyoming-protocol server
+            org.opencontainers.image.source=https://codeberg.org/NewtTheWolf/horchd
+            org.opencontainers.image.url=https://horchd.xyz
+            org.opencontainers.image.licenses=MIT OR Apache-2.0
+
+      - name: Build + push (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Registry-backed cache works anywhere `docker push` does;
+          # GHA cache (type=gha) needs the runner to expose
+          # ACTIONS_CACHE_URL + ACTIONS_RUNTIME_TOKEN, which is GitHub-
+          # Actions-specific.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max

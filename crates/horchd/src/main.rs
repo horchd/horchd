@@ -123,14 +123,23 @@ async fn main() -> Result<()> {
     let dbus_sink: Arc<dyn DetectionSink> = Arc::new(DBusSink::new(conn.clone()));
     let _dbus_handle = pipeline.add_sink(dbus_sink);
 
-    let initial_device = shared_state.lock().await.config.engine.device.clone();
-    let mut mic = MicSource::new(
-        initial_device,
-        AUDIO_CHANNEL_CAPACITY,
-        Arc::clone(&audio_stats),
-    );
-    let frames = mic.start().context("starting audio capture")?;
-    let mut inference_handle = spawn_inference(Arc::clone(&pipeline), frames);
+    let local_mic = shared_state.lock().await.config.engine.local_mic;
+    let mut mic_state: Option<(MicSource, JoinHandle<()>)> = if local_mic {
+        let initial_device = shared_state.lock().await.config.engine.device.clone();
+        let mut mic = MicSource::new(
+            initial_device,
+            AUDIO_CHANNEL_CAPACITY,
+            Arc::clone(&audio_stats),
+        );
+        let frames = mic.start().context("starting audio capture")?;
+        let inference_handle = spawn_inference(Arc::clone(&pipeline), frames);
+        Some((mic, inference_handle))
+    } else {
+        tracing::info!(
+            "local mic disabled (engine.local_mic = false); only Wyoming clients will be served"
+        );
+        None
+    };
 
     if let Some(handles) = wyoming::start(&shared_state, &pipeline)
         .await
@@ -159,23 +168,28 @@ async fn main() -> Result<()> {
                         let _ = reply.send(audio::list_input_device_names());
                     }
                     AudioCmd::SetDevice { name, persist, reply } => {
-                        let res = swap_device(
-                            &name,
-                            persist,
-                            &mut mic,
-                            &mut inference_handle,
-                            &shared_state,
-                            &audio_stats,
-                            &pipeline,
-                        )
-                        .await;
+                        let res = match mic_state.as_mut() {
+                            Some((mic, inference_handle)) => swap_device(
+                                &name,
+                                persist,
+                                mic,
+                                inference_handle,
+                                &shared_state,
+                                &audio_stats,
+                                &pipeline,
+                            )
+                            .await,
+                            None => Err(anyhow::anyhow!(
+                                "local mic is disabled (engine.local_mic = false); cannot switch device"
+                            )),
+                        };
                         let _ = reply.send(res);
                     }
                 }
             }
         }
     }
-    drop(mic);
+    drop(mic_state);
     tracing::info!("shutdown");
     Ok(())
 }

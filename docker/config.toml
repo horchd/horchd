@@ -1,0 +1,28 @@
+# Default config baked into the container image.
+#
+# Container deployment mode: no local microphone (the host's audio
+# devices aren't exposed unless you `-v /run/user/1000/pulse:...` or
+# `--device /dev/snd`), all wakeword detection runs on audio streamed
+# in over Wyoming from HA satellites or wyoming-cli clients.
+#
+# Override by mounting your own config: `-v ./my-config.toml:/etc/horchd/config.toml`.
+
+[engine]
+device = "default"
+sample_rate = 16000
+log_level = "info"
+local_mic = false                # headless: no cpal mic open
+
+[engine.shared_models]
+melspectrogram = "/usr/local/share/horchd/melspectrogram.onnx"
+embedding      = "/usr/local/share/horchd/embedding_model.onnx"
+
+# No [[wakeword]] entries shipped — drop your .onnx classifiers under
+# /data/horchd/models/ (mounted volume) and add them with:
+#   docker exec -it horchd horchctl wakeword import /data/horchd/models/alexa.onnx --as alexa
+
+[wyoming]
+enabled = true
+mode = "wyoming-server"          # client streams audio (HA standard)
+listen = ["tcp://0.0.0.0:10400"]
+zeroconf = false                 # mDNS in container = host-mode networking only

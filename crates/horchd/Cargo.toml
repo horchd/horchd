@@ -19,7 +19,7 @@ workspace = true
 default = ["bundled-onnxruntime"]
 
 # Static-link path. Pick one of these two and not both.
-bundled-onnxruntime = ["ort/download-binaries", "ort/tls-native", "ort/copy-dylibs"]
+bundled-onnxruntime = ["ort/download-binaries", "ort/tls-rustls", "ort/copy-dylibs"]
 
 # Dynamic-link path. The binary drops to ~5–7 MB but requires
 # `libonnxruntime.so` on the runtime system (Arch: `pacman -S onnxruntime`,

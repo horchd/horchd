@@ -670,6 +670,7 @@ mod tests {
             device: "default".into(),
             sample_rate: 16_000,
             log_level: "info".into(),
+            local_mic: true,
             shared_models: SharedModels {
                 melspectrogram: PathBuf::from("/m.onnx"),
                 embedding: PathBuf::from("/e.onnx"),

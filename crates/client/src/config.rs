@@ -31,11 +31,17 @@ pub struct Engine {
     pub sample_rate: u32,
     #[serde(default = "Engine::default_log_level")]
     pub log_level: String,
+    /// Open the system microphone at boot. Default `true`. Set `false`
+    /// for headless / containerised deployments where the daemon only
+    /// serves Wyoming clients (no local audio device available).
+    #[serde(default = "Engine::default_local_mic")]
+    pub local_mic: bool,
     pub shared_models: SharedModels,
 }
 
 impl Engine {
     pub const DEFAULT_SAMPLE_RATE: u32 = 16_000;
+    pub const DEFAULT_LOCAL_MIC: bool = true;
 
     fn default_device() -> String {
         "default".into()
@@ -45,6 +51,9 @@ impl Engine {
     }
     fn default_log_level() -> String {
         "info".into()
+    }
+    fn default_local_mic() -> bool {
+        Self::DEFAULT_LOCAL_MIC
     }
 }
 
@@ -199,6 +208,19 @@ impl Config {
                 });
             }
         }
+        // Wyoming mode `local-mic` fans out detections from the live mic
+        // pipeline. No mic = nothing to fan out. Hybrid still needs the
+        // mic for its broadcast half; only `wyoming-server` mode can run
+        // headless.
+        if self.wyoming.enabled
+            && !self.engine.local_mic
+            && matches!(
+                self.wyoming.mode,
+                WyomingMode::LocalMic | WyomingMode::Hybrid
+            )
+        {
+            return Err(Error::WyomingLocalMicRequiresMic);
+        }
         Ok(())
     }
 }
@@ -262,6 +284,56 @@ model = "/home/user/.local/share/horchd/models/jarvis.onnx"
         assert_eq!(cfg.wyoming.listen, vec!["tcp://0.0.0.0:10400".to_string()]);
         assert!(cfg.wyoming.zeroconf);
         assert!(cfg.wyoming.service_name.is_none());
+    }
+
+    #[test]
+    fn local_mic_defaults_true() {
+        let cfg: Config = SAMPLE.parse().expect("parse");
+        assert!(cfg.engine.local_mic);
+    }
+
+    #[test]
+    fn rejects_local_mic_false_with_wyoming_local_mic_mode() {
+        let bad = format!(
+            "{SAMPLE}\nlocal_mic = false\n\n[wyoming]\nenabled = true\nmode = \"local-mic\"\n"
+        );
+        // We can't just append to SAMPLE because the [wyoming] table must
+        // come AFTER all [[wakeword]]s, and `local_mic` must go inside
+        // [engine]. Build a fresh minimal config instead.
+        let _ = bad; // placeholder so the format! isn't dead
+        let bad = r#"
+[engine]
+local_mic = false
+
+[engine.shared_models]
+melspectrogram = "/m.onnx"
+embedding = "/e.onnx"
+
+[wyoming]
+enabled = true
+mode = "local-mic"
+"#;
+        let err = bad.parse::<Config>().unwrap_err();
+        assert!(matches!(err, Error::WyomingLocalMicRequiresMic));
+    }
+
+    #[test]
+    fn allows_local_mic_false_with_wyoming_server_mode() {
+        let ok = r#"
+[engine]
+local_mic = false
+
+[engine.shared_models]
+melspectrogram = "/m.onnx"
+embedding = "/e.onnx"
+
+[wyoming]
+enabled = true
+mode = "wyoming-server"
+"#;
+        let cfg: Config = ok.parse().expect("parse");
+        assert!(!cfg.engine.local_mic);
+        assert_eq!(cfg.wyoming.mode, WyomingMode::WyomingServer);
     }
 
     #[test]

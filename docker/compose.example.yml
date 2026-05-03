@@ -1,0 +1,39 @@
+# Drop-in compose file for the headless wyoming-server deployment.
+#
+#   docker compose -f docker/compose.example.yml up -d
+#
+# After it's up:
+#   docker exec -it horchd horchctl status
+#   docker exec -it horchd horchctl wyoming status
+#   docker exec -it horchd horchctl wakeword import \
+#       https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/alexa_v0.1.onnx
+#
+# Then add the daemon to Home Assistant: Settings → Devices & services
+# → Add Integration → Wyoming Protocol → manual entry: <host-ip>:10400.
+# (Auto-discovery via mDNS only works with `network_mode: host` —
+# see the commented-out section below.)
+
+services:
+  horchd:
+    image: ghcr.io/newtthewolf/horchd:latest
+    container_name: horchd
+    restart: unless-stopped
+    ports:
+      - "10400:10400"
+    volumes:
+      # Persists imported wakeword .onnx files across container recreations.
+      - horchd-data:/data
+      # Optional: bring your own config (overrides the baked default).
+      # - ./my-config.toml:/etc/horchd/config.toml:ro
+    environment:
+      - RUST_LOG=info
+
+    # --- mDNS auto-discovery ---
+    # The default deployment doesn't auto-discover into HA because mDNS
+    # needs the host network. If you want HA to find horchd at "Add
+    # Integration" time without typing the IP, swap the `ports` block
+    # above for `network_mode: host` and set [wyoming].zeroconf = true
+    # in your mounted config.
+
+volumes:
+  horchd-data:

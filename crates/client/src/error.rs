@@ -45,4 +45,9 @@ pub enum Error {
 
     #[error("model path for wakeword {name:?} is not valid UTF-8")]
     NonUtf8ModelPath { name: String },
+
+    #[error(
+        "[wyoming].mode = \"local-mic\" requires [engine].local_mic = true (no local audio source otherwise)"
+    )]
+    WyomingLocalMicRequiresMic,
 }
