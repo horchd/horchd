@@ -32,15 +32,21 @@ parallel `Daemon2` interface so existing clients keep working.
 | `SetEnabled`    | `s name`, `b enabled`, `b persist`                           | `()`           | Toggle without unloading. |
 | `SetCooldown`   | `s name`, `u ms`, `b persist`                                | `()`           |  |
 | `Reload`        | —                                                            | `()`           | Re-read config; diff against in-memory state. Hot-keeps unchanged models; loads new ones; unloads removed ones. Audio thread is preserved. |
+| `ListInputDevices` | —                                                         | `as`           | Sorted list of cpal input device names available on the default host. |
+| `SetInputDevice`   | `s name`, `b persist`                                     | `()`           | Hot-swap the cpal capture device. `"default"` follows the host default. `persist=true` writes back to TOML. |
+| `ProcessAudio`     | `s path`                                                  | `a(sdt)`       | Run all configured wakewords against a 16 kHz mono int16 WAV file off the live mic pipeline. Returns `(name, score, ms_into_file)` per detection. |
+| `WyomingStatus`    | —                                                         | `(bsas)`       | `(enabled, mode, listen_uris)` for the embedded Wyoming server. `enabled` reflects current bound state, not just the config flag. |
+| `SetWyomingEnabled`| `b enabled`, `b persist`                                  | `b`            | Hot-toggle the Wyoming listener + mDNS at runtime. Returns the bound state after the call. `persist=true` writes `[wyoming].enabled` back to TOML. |
 
 Errors are returned as standard `org.freedesktop.DBus.Error.InvalidArgs` or
 `org.freedesktop.DBus.Error.Failed` with a human-readable message.
 
 ## Signals
 
-| Signal     | Args                                  | Notes |
-| ---------- | ------------------------------------- | ----- |
-| `Detected` | `s name`, `d score`, `t timestamp_us` | Emitted on the rising edge: when a wakeword's score crosses its threshold for the first time within a cooldown window. `timestamp_us` is `CLOCK_MONOTONIC` microseconds since system boot. |
+| Signal          | Args                                  | Notes |
+| --------------- | ------------------------------------- | ----- |
+| `Detected`      | `s name`, `d score`, `t timestamp_us` | Emitted on the rising edge: when a wakeword's score crosses its threshold for the first time within a cooldown window. `timestamp_us` is `CLOCK_MONOTONIC` microseconds since system boot. |
+| `ScoreSnapshot` | `s name`, `d score`                   | Low-rate (~5 Hz) per-wakeword score for live UI meters. Always-on; subscribe-time decides cost. |
 
 ## Introspection
 

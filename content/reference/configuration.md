@@ -36,6 +36,13 @@ name = "hey_jarvis"
 model = "~/.local/share/horchd/models/hey_jarvis_v0.1.onnx"
 threshold = 0.65
 cooldown_ms = 1500
+
+[wyoming]                    # off by default — see "Wyoming server"
+enabled = false
+mode = "wyoming-server"      # local-mic | wyoming-server | hybrid
+listen = ["tcp://0.0.0.0:10400"]
+zeroconf = true              # advertise _wyoming._tcp.local. for HA auto-discovery
+# service_name = "horchd-living"   # default = "horchd-<hostname>"
 ```
 
 ## Field reference
@@ -67,6 +74,21 @@ per-wakeword. `install.sh` puts them under `/usr/local/share/horchd/`.
 | `threshold`   | float  | `0.5`   | Score must rise to this for a fire. |
 | `cooldown_ms` | int    | `1500`  | Suppress refire within this window. |
 | `enabled`     | bool   | `true`  | Toggle without unloading. |
+
+### `[wyoming]`
+
+Embedded Wyoming-protocol server. See the
+[Home Assistant recipe](../../recipes/home-assistant/) for the
+end-to-end walkthrough. Off by default; toggle at runtime with
+`horchctl wyoming enable --save`.
+
+| Field          | Type     | Default                         | Notes |
+| -------------- | -------- | ------------------------------- | ----- |
+| `enabled`      | bool     | `false`                         | Whether to bind the listener at boot. |
+| `mode`         | string   | `"local-mic"`                   | `local-mic` (server-owned mic) · `wyoming-server` (client streams audio — HA standard) · `hybrid` (both). |
+| `listen`       | string[] | `["tcp://0.0.0.0:10400"]`       | URI scheme `tcp://` · `unix://` · `stdio://`. Multiple OK. |
+| `zeroconf`     | bool     | `true`                          | Advertise `_wyoming._tcp.local.` for HA auto-discovery. |
+| `service_name` | string?  | `horchd-<hostname-suffix>`      | mDNS service label. |
 
 ## Multiple aliases on the same model
 
