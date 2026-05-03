@@ -75,6 +75,12 @@ pub trait Daemon {
     /// indicator and as a live input-level meter.
     fn get_status(&self) -> zbus::Result<(bool, f64, f64, f64)>;
 
+    /// Snapshot of the Wyoming server status: `(enabled, mode, listen)`.
+    /// `mode` is `"local-mic" | "wyoming-server" | "hybrid"`. `listen`
+    /// is the same set of URIs from `[wyoming].listen`. Hot toggle
+    /// (start/stop without daemon restart) is not yet exposed.
+    fn wyoming_status(&self) -> zbus::Result<(bool, String, Vec<String>)>;
+
     /// Emitted on the rising edge when a wakeword's score crosses its
     /// threshold for the first time within a cooldown window.
     /// `timestamp_us` is `CLOCK_MONOTONIC` microseconds since boot.

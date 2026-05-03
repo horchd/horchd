@@ -64,6 +64,14 @@ impl Pipeline {
         )
     }
 
+    /// Direct access to the Detection broadcast for consumers that need
+    /// custom select-loop integration (e.g. the Wyoming connection
+    /// handler, which interleaves detection fan-out with client-event
+    /// reads). Sink-style consumers should use [`add_sink`] instead.
+    pub fn subscribe_detections(&self) -> broadcast::Receiver<Detection> {
+        self.detections.subscribe()
+    }
+
     /// Drive `frames` through inference. Returns when the receiver
     /// closes — typically because the source was dropped or its
     /// underlying transport ended.

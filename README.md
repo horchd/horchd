@@ -35,6 +35,7 @@ you want a native daemon instead of a Python process, and loads any
 - **Multi-wakeword** — N classifiers run on the same audio frame, fan-out at the embedding stage
 - **Cheap** — ~12.5 inferences/sec on one core, ~1.5 MB shared models + ~80 KB per wakeword
 - **D-Bus first** — no HTTP listener, no custom socket, no cloud
+- **Wyoming-protocol server** — drop-in for `wyoming-openwakeword`, auto-discovered by Home Assistant via mDNS
 - **systemd user unit** — no root, no system-bus policy file
 - **Hot-reload** — edit the TOML, `horchctl reload`, never drops the audio thread
 - **Trainer-agnostic** — bring any
@@ -255,6 +256,7 @@ migrate.
 | `ListInputDevices`   | —                                                        | `as`         |
 | `SetInputDevice`     | `s name`, `b persist`                                    | `()`         |
 | `Reload`             | —                                                        | `()`         |
+| `WyomingStatus`      | —                                                        | `(bsas)`     |
 
 `GetStatus` returns `(running, audio_fps, score_fps, mic_level)` — the
 trailing `mic_level` is the smoothed peak `|sample|` of the most recent
@@ -265,12 +267,54 @@ models directory (`$XDG_DATA_HOME/horchd/models/` or
 `~/.local/share/horchd/models/`) and rejects anything else, so a
 session-bus client cannot point the daemon at arbitrary files.
 
+`WyomingStatus` returns `(enabled, mode, listen_uris)` for the embedded
+[Wyoming](https://github.com/OHF-Voice/wyoming) protocol server — see
+the next section.
+
 | Signal          | Args                                  | Notes |
 | --------------- | ------------------------------------- | ----- |
 | `Detected`      | `s name`, `d score`, `t timestamp_us` | Rising-edge fire after threshold + cooldown. |
 | `ScoreSnapshot` | `s name`, `d score`                   | ~5 Hz per-wakeword score; for live UI meters. |
 
 Full reference + introspection output: <https://horchd.github.io/dbus-api>.
+
+## Wyoming server (Home Assistant)
+
+horchd embeds a [Wyoming-protocol](https://github.com/OHF-Voice/wyoming)
+listener so Home Assistant's voice pipeline (and any other Wyoming
+client) talks to it directly — no bridge daemon, no
+`wyoming-openwakeword` Python service in the middle.
+
+Off by default. Enable with:
+
+```toml
+# ~/.config/horchd/config.toml
+[wyoming]
+enabled = true
+mode = "local-mic"                       # only mode wired today
+listen = ["tcp://0.0.0.0:10400"]
+zeroconf = true                          # advertise _wyoming._tcp.local.
+# service_name = "horchd-living"         # default = "horchd-<hostname>"
+```
+
+Restart the daemon, then verify:
+
+```bash
+horchctl wyoming status
+echo '{"type":"describe"}' | nc -q1 127.0.0.1 10400
+```
+
+The second line returns an `info` event listing every wakeword you've
+registered. Add the daemon as a Wyoming integration in Home Assistant —
+mDNS auto-discovery should surface it as `horchd-<hostname>` on
+`_wyoming._tcp.local.`. If discovery is blocked on your network, point
+HA at `<host>:10400` manually.
+
+In `local-mic` mode the daemon owns the microphone; client `audio-chunk`
+events are accepted but ignored, and detections from the live mic
+pipeline fan out to every connected client. Modes for "client streams
+the audio" (`wyoming-server`, `hybrid`) are reserved in the schema for a
+later release.
 
 ## Subscribers
 
@@ -345,6 +389,8 @@ horchctl process recording.wav --json  # one JSON object per detection, jq-frien
 horchctl device list                            # what input devices does cpal see?
 horchctl device set "PipeWire Sound Server"     # transient hot-swap
 horchctl device set default --save              # persist to config.toml
+
+horchctl wyoming status                         # is the Wyoming server up? which URIs?
 ```
 
 All mutator commands either error out cleanly (validates shape /

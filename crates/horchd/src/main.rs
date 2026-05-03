@@ -7,6 +7,10 @@ use clap::Parser;
 use horchd::audio::{AudioStats, MicSource};
 use horchd::pipeline::Pipeline;
 use horchd::sink::DBusSink;
+use horchd::wyoming::{
+    ServerCtx as WyomingCtx, ZeroconfHandle as WyomingZeroconfHandle,
+    announce_zeroconf as announce_wyoming, parse_uri as parse_wyoming_uri, serve as serve_wyoming,
+};
 use horchd::{AudioCmd, audio, detector, inference, persist, service, state};
 use horchd_client::{AudioSource, Config, DetectionSink};
 use tokio::sync::mpsc;
@@ -127,6 +131,8 @@ async fn main() -> Result<()> {
     let frames = mic.start().context("starting audio capture")?;
     let mut inference_handle = spawn_inference(Arc::clone(&pipeline), frames);
 
+    let (_wyoming_handles, _zeroconf) = start_wyoming(&shared_state, &pipeline).await?;
+
     tokio::spawn(log_stats(
         Arc::clone(&audio_stats),
         Arc::clone(&inference_stats),
@@ -170,6 +176,79 @@ fn spawn_inference(
     frames: mpsc::Receiver<horchd_client::AudioFrame>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move { pipeline.run(frames).await })
+}
+
+/// Bind every configured Wyoming listener and spawn its accept loop.
+/// Returns an empty Vec when `[wyoming] enabled = false` (the default).
+/// The optional `ZeroconfHandle` keeps the mDNS service alive — the
+/// caller must hold onto it until shutdown, otherwise the announcement
+/// disappears.
+async fn start_wyoming(
+    shared_state: &state::SharedState,
+    pipeline: &Arc<Pipeline>,
+) -> Result<(Vec<JoinHandle<()>>, Option<WyomingZeroconfHandle>)> {
+    let (enabled, mode, listen, zeroconf, service_name) = {
+        let s = shared_state.lock().await;
+        (
+            s.config.wyoming.enabled,
+            s.config.wyoming.mode,
+            s.config.wyoming.listen.clone(),
+            s.config.wyoming.zeroconf,
+            s.config.wyoming.service_name.clone(),
+        )
+    };
+    if !enabled {
+        tracing::info!("Wyoming server disabled (set [wyoming].enabled = true to enable)");
+        return Ok((Vec::new(), None));
+    }
+
+    let addrs = listen
+        .iter()
+        .map(|u| parse_wyoming_uri(u))
+        .collect::<Result<Vec<_>>>()
+        .context("parsing [wyoming].listen URIs")?;
+
+    let ctx = Arc::new(WyomingCtx {
+        state: Arc::clone(shared_state),
+        pipeline: Arc::clone(pipeline),
+        mode,
+    });
+    let handles = serve_wyoming(addrs.clone(), ctx).await?;
+
+    let zeroconf_handle = if zeroconf {
+        let name = service_name.unwrap_or_else(default_service_name);
+        match announce_wyoming(&addrs, &name) {
+            Ok(h) => h,
+            Err(err) => {
+                tracing::warn!(
+                    ?err,
+                    "mDNS announcement failed; Wyoming still reachable by IP"
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    Ok((handles, zeroconf_handle))
+}
+
+fn default_service_name() -> String {
+    let host = hostname::get()
+        .ok()
+        .and_then(|h| h.into_string().ok())
+        .unwrap_or_else(|| "horchd".into());
+    let suffix: String = host
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(8)
+        .collect();
+    if suffix.is_empty() {
+        "horchd".into()
+    } else {
+        format!("horchd-{suffix}")
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

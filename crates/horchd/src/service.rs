@@ -167,6 +167,24 @@ impl Daemon {
         )
     }
 
+    /// `(enabled, mode, listen)`. Reads the in-memory config — hot
+    /// toggle (start/stop without daemon restart) is not yet exposed,
+    /// so `enabled=true` here means "the listener was started at boot".
+    async fn wyoming_status(&self) -> (bool, String, Vec<String>) {
+        let s = self.state.lock().await;
+        let mode = match s.config.wyoming.mode {
+            horchd_client::WyomingMode::LocalMic => "local-mic",
+            horchd_client::WyomingMode::WyomingServer => "wyoming-server",
+            horchd_client::WyomingMode::Hybrid => "hybrid",
+        }
+        .to_string();
+        (
+            s.config.wyoming.enabled,
+            mode,
+            s.config.wyoming.listen.clone(),
+        )
+    }
+
     /// Validate, load, and persist a new wakeword.
     async fn add(
         &self,
@@ -598,6 +616,7 @@ mod tests {
         Config {
             engine: engine_for_tests(),
             wakewords: wakes,
+            wyoming: horchd_client::WyomingConfig::default(),
         }
     }
 
