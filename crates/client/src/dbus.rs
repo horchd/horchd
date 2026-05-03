@@ -76,10 +76,16 @@ pub trait Daemon {
     fn get_status(&self) -> zbus::Result<(bool, f64, f64, f64)>;
 
     /// Snapshot of the Wyoming server status: `(enabled, mode, listen)`.
-    /// `mode` is `"local-mic" | "wyoming-server" | "hybrid"`. `listen`
-    /// is the same set of URIs from `[wyoming].listen`. Hot toggle
-    /// (start/stop without daemon restart) is not yet exposed.
+    /// `enabled` is whether listeners are bound *right now* (not just
+    /// the config flag), so it flips immediately after a successful
+    /// [`set_wyoming_enabled`] call. `mode` is `"local-mic" |
+    /// "wyoming-server" | "hybrid"`.
     fn wyoming_status(&self) -> zbus::Result<(bool, String, Vec<String>)>;
+
+    /// Bind (or unbind) the Wyoming listeners + mDNS announce at
+    /// runtime. `persist=true` writes `[wyoming].enabled = <value>`
+    /// back to `config.toml`. Returns the bound state after the call.
+    fn set_wyoming_enabled(&self, enabled: bool, persist: bool) -> zbus::Result<bool>;
 
     /// Emitted on the rising edge when a wakeword's score crosses its
     /// threshold for the first time within a cooldown window.

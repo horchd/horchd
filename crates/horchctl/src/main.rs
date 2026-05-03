@@ -49,6 +49,18 @@ enum Command {
 enum WyomingCommand {
     /// Show the configured listeners and whether the Wyoming server is enabled.
     Status,
+    /// Start the Wyoming listener at runtime. `--save` also writes
+    /// `[wyoming].enabled = true` to `config.toml`.
+    Enable {
+        #[arg(long)]
+        save: bool,
+    },
+    /// Stop the Wyoming listener at runtime. `--save` also writes
+    /// `[wyoming].enabled = false` to `config.toml`.
+    Disable {
+        #[arg(long)]
+        save: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -206,6 +218,30 @@ async fn run_wyoming(proxy: &DaemonProxy<'_>, cmd: WyomingCommand) -> Result<()>
                     println!("  {uri}");
                 }
             }
+            Ok(())
+        }
+        WyomingCommand::Enable { save } => {
+            let bound = proxy
+                .set_wyoming_enabled(true, save)
+                .await
+                .context("SetWyomingEnabled(true)")?;
+            println!(
+                "Wyoming server {}{}",
+                if bound { "running" } else { "not running" },
+                if save { " (persisted)" } else { "" }
+            );
+            Ok(())
+        }
+        WyomingCommand::Disable { save } => {
+            let bound = proxy
+                .set_wyoming_enabled(false, save)
+                .await
+                .context("SetWyomingEnabled(false)")?;
+            println!(
+                "Wyoming server {}{}",
+                if bound { "still running" } else { "stopped" },
+                if save { " (persisted)" } else { "" }
+            );
             Ok(())
         }
     }

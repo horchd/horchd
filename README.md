@@ -257,6 +257,7 @@ migrate.
 | `SetInputDevice`     | `s name`, `b persist`                                    | `()`         |
 | `Reload`             | —                                                        | `()`         |
 | `WyomingStatus`      | —                                                        | `(bsas)`     |
+| `SetWyomingEnabled`  | `b enabled`, `b persist`                                 | `b`          |
 
 `GetStatus` returns `(running, audio_fps, score_fps, mic_level)` — the
 trailing `mic_level` is the smoothed peak `|sample|` of the most recent
@@ -285,7 +286,16 @@ listener so Home Assistant's voice pipeline (and any other Wyoming
 client) talks to it directly — no bridge daemon, no
 `wyoming-openwakeword` Python service in the middle.
 
-Off by default. Enable with:
+Off by default. Two ways to enable:
+
+```bash
+# Hot toggle, no daemon restart. --save also writes back to config.toml.
+horchctl wyoming enable --save
+horchctl wyoming status
+horchctl wyoming disable           # transient; comes back on next start
+```
+
+…or by editing the config file directly:
 
 ```toml
 # ~/.config/horchd/config.toml
@@ -297,10 +307,9 @@ zeroconf = true                          # advertise _wyoming._tcp.local.
 # service_name = "horchd-living"         # default = "horchd-<hostname>"
 ```
 
-Restart the daemon, then verify:
+Verify the listener answers:
 
 ```bash
-horchctl wyoming status
 echo '{"type":"describe"}' | nc -q1 127.0.0.1 10400
 ```
 
@@ -391,6 +400,8 @@ horchctl device set "PipeWire Sound Server"     # transient hot-swap
 horchctl device set default --save              # persist to config.toml
 
 horchctl wyoming status                         # is the Wyoming server up? which URIs?
+horchctl wyoming enable --save                  # bind listeners now + persist
+horchctl wyoming disable                        # stop listeners (transient)
 ```
 
 All mutator commands either error out cleanly (validates shape /

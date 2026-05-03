@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use horchd_client::{Config, DetectionEntry, MAX_COOLDOWN_MS, Wakeword, WakewordSnapshot};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
@@ -23,9 +23,10 @@ use crate::audio::{AudioStats, FileSource};
 use crate::detector::Detector;
 use crate::inference::{Classifier, InferencePipeline, InferenceStats, Preprocessor};
 use crate::persist;
-use crate::pipeline::TransientPipeline;
+use crate::pipeline::{Pipeline, TransientPipeline};
 use crate::sink::MpscSink;
 use crate::state::SharedState;
+use crate::wyoming::{self, WyomingHandles};
 use horchd_client::{AudioSource as _, DetectionSink};
 
 pub struct Daemon {
@@ -33,6 +34,8 @@ pub struct Daemon {
     audio_stats: Arc<AudioStats>,
     inference_stats: Arc<InferenceStats>,
     audio_cmd_tx: mpsc::Sender<AudioCmd>,
+    wyoming_handles: Arc<Mutex<Option<WyomingHandles>>>,
+    pipeline: Arc<Pipeline>,
 }
 
 impl Daemon {
@@ -41,12 +44,16 @@ impl Daemon {
         audio_stats: Arc<AudioStats>,
         inference_stats: Arc<InferenceStats>,
         audio_cmd_tx: mpsc::Sender<AudioCmd>,
+        wyoming_handles: Arc<Mutex<Option<WyomingHandles>>>,
+        pipeline: Arc<Pipeline>,
     ) -> Self {
         Self {
             state,
             audio_stats,
             inference_stats,
             audio_cmd_tx,
+            wyoming_handles,
+            pipeline,
         }
     }
 }
@@ -167,9 +174,9 @@ impl Daemon {
         )
     }
 
-    /// `(enabled, mode, listen)`. Reads the in-memory config — hot
-    /// toggle (start/stop without daemon restart) is not yet exposed,
-    /// so `enabled=true` here means "the listener was started at boot".
+    /// `(enabled, mode, listen)`. `enabled` reflects whether listeners
+    /// are actually bound right now (not just the config flag), so a
+    /// successful `SetWyomingEnabled(true, _)` flips this immediately.
     async fn wyoming_status(&self) -> (bool, String, Vec<String>) {
         let s = self.state.lock().await;
         let mode = match s.config.wyoming.mode {
@@ -178,11 +185,69 @@ impl Daemon {
             horchd_client::WyomingMode::Hybrid => "hybrid",
         }
         .to_string();
-        (
-            s.config.wyoming.enabled,
-            mode,
-            s.config.wyoming.listen.clone(),
-        )
+        let listen = s.config.wyoming.listen.clone();
+        drop(s);
+        let bound = self.wyoming_handles.lock().await.is_some();
+        (bound, mode, listen)
+    }
+
+    /// Bind (or unbind) the configured Wyoming listeners + mDNS
+    /// announcement at runtime — no daemon restart needed. Pass
+    /// `persist=true` to also write `[wyoming].enabled = <value>` back
+    /// to `config.toml` so the choice survives a restart.
+    ///
+    /// Returns the resulting bound state. Calling enable when already
+    /// running (or disable when already off) is a no-op.
+    async fn set_wyoming_enabled(
+        &self,
+        enabled: bool,
+        persist_to_disk: bool,
+    ) -> zbus::fdo::Result<bool> {
+        let mut slot = self.wyoming_handles.lock().await;
+        match (enabled, slot.is_some()) {
+            (true, true) | (false, false) => {
+                // already in the requested state; just optionally persist.
+            }
+            (true, false) => {
+                {
+                    let mut s = self.state.lock().await;
+                    s.config.wyoming.enabled = true;
+                }
+                let new = wyoming::start(&self.state, &self.pipeline)
+                    .await
+                    .map_err(|e| failed(format!("starting Wyoming: {e:#}")))?;
+                if new.is_none() {
+                    // Shouldn't happen — we just flipped enabled to true.
+                    return Err(failed("Wyoming start returned None despite enabled=true"));
+                }
+                *slot = new;
+                tracing::info!("Wyoming server started via D-Bus");
+            }
+            (false, true) => {
+                if let Some(handles) = slot.take() {
+                    handles.stop();
+                }
+                let mut s = self.state.lock().await;
+                s.config.wyoming.enabled = false;
+                tracing::info!("Wyoming server stopped via D-Bus");
+            }
+        }
+        let now_bound = slot.is_some();
+        drop(slot);
+
+        if persist_to_disk {
+            let path = {
+                let s = self.state.lock().await;
+                s.config_path.clone()
+            };
+            persist::set_wyoming_enabled(&path, enabled).map_err(|e| {
+                failed(format!(
+                    "persisting [wyoming].enabled to {}: {e:#}",
+                    path.display()
+                ))
+            })?;
+        }
+        Ok(now_bound)
     }
 
     /// Validate, load, and persist a new wakeword.
