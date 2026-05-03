@@ -5,6 +5,7 @@ members = [
     "crates/horchd",
     "crates/client",
     "crates/gui/src-tauri",
+    "crates/wyoming",
 ]
 
 [workspace.package]
