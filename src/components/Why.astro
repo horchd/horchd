@@ -14,9 +14,9 @@ const cols = [
   },
   {
     n: "III",
-    title: "Speaks D-Bus, not a custom port.",
-    body: "Every Linux desktop already runs a session bus. horchd registers xyz.horchd.Daemon1 there, broadcasts a typed Detected signal, and lets anything subscribe — Home Assistant bridges, shell scripts, the bundled horchctl monitor, the tray app. No HTTP listener, no auth to invent, no protocol to maintain.",
-    foot: "session bus · no policy file",
+    title: "Talks the protocols you already speak.",
+    body: "On the desktop: a typed xyz.horchd.Daemon1.Detected signal on the session bus — anything that speaks D-Bus subscribes. For Home Assistant: an embedded Wyoming-protocol server, mDNS-announced as _wyoming._tcp.local., drop-in for wyoming-openwakeword. No HTTP listener, no custom port, no auth to invent.",
+    foot: "D-Bus · Wyoming · mDNS",
   },
 ];
 ---

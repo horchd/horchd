@@ -29,7 +29,7 @@ import Footer from "../components/Footer.astro";
     <meta property="og:title" content="horchd — native wakeword daemon" />
     <meta
       property="og:description"
-      content="Native Linux multi-wakeword detection over D-Bus. Rust + ONNX Runtime, 5.2 MB binary, ≈1% CPU at idle."
+      content="Native Linux multi-wakeword detection. D-Bus on the desktop, Wyoming protocol for Home Assistant. Rust + ONNX Runtime, ~30 MB binary, ≈1% CPU at idle."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://horchd.xyz/" />
@@ -137,8 +137,9 @@ import Footer from "../components/Footer.astro";
                 <code style="color:var(--fg-base);background:var(--bg-card);padding:1px 6px;border:1px solid var(--border);font-size:13px;">.onnx</code>
                 classifiers in parallel, listens to your mic, and broadcasts a
                 <code style="color:var(--fg-base);background:var(--bg-card);padding:1px 6px;border:1px solid var(--border);font-size:13px;">D-Bus Detected</code>
-                signal the moment any of them fires. Anything that speaks the
-                session bus can subscribe.
+                signal the moment any of them fires. Talks the
+                <a href="https://github.com/OHF-Voice/wyoming" style="color:var(--signal);" target="_blank" rel="noopener">Wyoming protocol</a>
+                too — drop-in wake-word engine for Home Assistant's voice pipeline.
               </p>
 
               <div class="cta-row reveal reveal-4">
@@ -175,7 +176,7 @@ import Footer from "../components/Footer.astro";
                 <span>session bus →</span>
                 <span class="kbd">xyz.horchd.Daemon1.Detected</span>
                 <span>·</span>
-                <span class="kbd">CLOCK_MONOTONIC</span>
+                <span class="kbd">_wyoming._tcp.local.</span>
               </div>
             </div>
 
